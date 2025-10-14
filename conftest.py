@@ -27,6 +27,26 @@ import pyvista as pv
 import SimpleITK as sitk
 from skimage.metrics import structural_similarity, mean_squared_error,normalized_root_mse
 import trimesh
+from pathlib import Path
+import xmltodict
+from pprint import pprint
+import yaml
+
+from glob import glob
+
+_IS_MAC = platform.system() == 'Darwin'
+
+def resource_path():  # needed for bundling
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if not _IS_MAC:
+        return os.path.split(Path(__file__))[0]
+
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        bundle_dir = Path(sys._MEIPASS)
+    else:
+        bundle_dir = Path(__file__).parent
+
+    return bundle_dir
 
 from BabelBrain.BabelBrain import BabelBrain
 from BabelBrain.SelFiles.SelFiles import SelFiles
@@ -97,25 +117,43 @@ thermal_profiles = {
     'thermal_profile_2': test_data_folder + os.sep + 'Profiles' + os.sep + 'Thermal_Profile_2.yaml',
     'thermal_profile_3': test_data_folder + os.sep + 'Profiles' + os.sep + 'Thermal_Profile_3.yaml'
 }
-transducers = [
-    {'name': 'Single',      'dropdown_index': 0,  'diameter': 0, 'freqs':[200000.0,250000.0,300000.0,350000.0,400000.0,450000.0,500000.0,550000.0,600000.0,650000.0,700000.0,750000.0,800000.0,850000.0,900000.0,950000.0,1000000.0]}, # EDIT DIAMETER
-    {'name': 'CTX_500',     'dropdown_index': 1,  'diameter': 0, 'freqs':[500000.0,545000.0]},
-    {'name': 'CTX_250',     'dropdown_index': 2,  'diameter': 0, 'freqs':[250000.0]},
-    {'name': 'CTX_250_2ch', 'dropdown_index': 3,  'diameter': 0, 'freqs':[250000.0]},
-    {'name': 'DPX_500',     'dropdown_index': 4,  'diameter': 0, 'freqs':[500000.0]},
-    {'name': 'DPXPC_300',   'dropdown_index': 5,  'diameter': 0, 'freqs':[300000.0]},
-    {'name': 'H317',        'dropdown_index': 6,  'diameter': 0, 'freqs':[250000.0,700000.0,825000.0]},
-    {'name': 'H246',        'dropdown_index': 7,  'diameter': 0, 'freqs':[500000.0]},
-    {'name': 'BSonix',      'dropdown_index': 8,  'diameter': 0, 'freqs':[650000.0]},
-    {'name': 'REMOPD',      'dropdown_index': 9,  'diameter': 0, 'freqs':[300000.0,480000.0,490000.0]},
-    {'name': 'I12378',      'dropdown_index': 10, 'diameter': 0, 'freqs':[650000.0]},
-    {'name': 'ATAC',        'dropdown_index': 11, 'diameter': 0, 'freqs':[1000000.0]},
-    {'name': 'R15148',      'dropdown_index': 12, 'diameter': 0, 'freqs':[500000.0]},
-    {'name': 'R15287',      'dropdown_index': 13, 'diameter': 0, 'freqs':[300000.0]},
-    {'name': 'R15473',      'dropdown_index': 14, 'diameter': 0, 'freqs':[300000.0]},
-    {'name': 'R15646',      'dropdown_index': 15, 'diameter': 0, 'freqs':[650000.0]},
-    {'name': 'IGT64_500',   'dropdown_index': 16, 'diameter': 0, 'freqs':[500000.0]},
-]
+
+#we build the Tx list using the ui and Tx yaml files
+ListYAMLTx=glob(os.path.join(resource_path(),'..','BabelBrain','Babel_*/*.yaml'),recursive=True)
+pprint(ListYAMLTx)
+
+with open(os.path.join(resource_path(),'..','BabelBrain','SelFiles','form.ui'),'r') as fui:
+    uistr=fui.read()
+uidict=xmltodict.parse(uistr)
+TxSelUI=uidict['ui']['widget']['widget'][2]['widget'][0]
+assert(TxSelUI['@name']== 'TransducerTypecomboBox')
+transducers=[]
+for n,txelem in enumerate(TxSelUI['item']):
+    name=txelem['property']['string']
+    selYaml=None
+    for sl in ListYAMLTx:
+        if '/Babel'+name.replace('_','') in sl.replace('_',''):
+            selYaml=sl
+            break
+        elif name =='BSonix' and 'BSonix.yaml' in sl:
+            selYaml=sl
+            break
+    if selYaml is None:
+        print('missing',name)
+    assert(selYaml is not None)
+    with open(selYaml,'r') as ftx:
+        TxConfig=yaml.load(ftx,yaml.SafeLoader)
+    if name =='Single':
+        freqs=[200000.0,250000.0,300000.0,350000.0,400000.0,450000.0,500000.0,550000.0,600000.0,650000.0,700000.0,750000.0,800000.0,850000.0,900000.0,950000.0,1000000.0]
+    else:
+        freqs=TxConfig['USFrequencies']
+    entry={}
+    entry['name']=name
+    entry['dropdown_index']=n
+    entry['diameter']=0
+    entry['freqs']=freqs
+    transducers.append(entry)
+
 computing_backends = [
     # {'type': 'CPU','supported_os': ['Mac','Windows','Linux']},
     {'type': 'OpenCL','supported_os': ['Windows','Linux']},
@@ -653,17 +691,17 @@ def get_freq():
         tx = tx['name']
         if tx == 'Single':
             freq = '400'
-        elif tx in ['CTX_500','DPX_500','H246','R15148']:
+        elif tx in ['CTX_500','DPX_500','H246','R15148','IGT64_500']:
             freq = '500'
-        elif tx == 'CTX_250':
+        elif tx in ['CTX_250','CTX_250_2ch']:
             freq = '250'
         elif tx == 'H317':
             freq = '250'
-        elif tx in ['BSonix','I12378']:
+        elif tx in ['BSonix','I12378','R15646']:
             freq = '650'
         elif tx in ['ATAC']:
             freq = '1000'
-        elif tx == 'REMOPD':
+        elif tx in ['REMOPD','R15287','DPXPC_300','R15473']:
             freq = '300'
         return freq
     
