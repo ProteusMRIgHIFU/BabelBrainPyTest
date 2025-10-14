@@ -475,6 +475,7 @@ def compare_data(get_rmse):
                             # Encode the image data as base64 string
                             base64_plot = base64.b64encode(buffer.getvalue()).decode('utf-8')
                             node_screenshots.append(base64_plot)
+                            plt.close('all')
                             
                         else:
                             logging.warning(f"Dataset {name} differs")   
