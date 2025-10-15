@@ -33,10 +33,26 @@ def test_full_pipeline_normal(qtbot,babelbrain_widget,image_to_base64,check_os,r
 
     # Run Step 2
     bb_widget.Widget.tabWidget.setCurrentIndex(1)
+    #check if Tx with cone design and steering
+    if hasattr(bb_widget.AcSim.Widget,'DistanceConeToFocusSpinBox'): 
+        DistanceConeToFocusSpinBox=bb_widget.AcSim.Widget.DistanceConeToFocusSpinBox
+        minDistance=DistanceConeToFocusSpinBox.minimum()
+        maxDistance=DistanceConeToFocusSpinBox.maximum()
+        skinToTarget=bb_widget.AcSim.Widget.DistanceSkinLabel.property('UserData')
+        ZSteering=0.0
+        if skinToTarget >=minDistance and skinToTarget<=maxDistance:
+            DistanceConeToFocusSpinBox.setValue(skinToTarget)
+        elif skinToTarget>maxDistance:
+            DistanceConeToFocusSpinBox.setValue(maxDistance)
+            ZSteering=skinToTarget-maxDistance
+        else:
+            DistanceConeToFocusSpinBox.setValue(minDistance)
+            ZSteering=skinToTarget-minDistance
+        bb_widget.AcSim.Widget.ZSteeringSpinBox.setValue(ZSteering)
     bb_widget.AcSim.Widget.CalculateAcField.click()
 
-    # Wait for step 2 completion before continuing. Test timeouts after 15 min have past
-    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=900000)
+    # Wait for step 2 completion before continuing. Test timeouts after 30 min have past
+    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=1800000)
     qtbot.wait(1000) # Wait for plots to display
 
     # Take screenshot of step 2 results
@@ -99,10 +115,26 @@ def test_full_pipeline_regression_normal(qtbot,babelbrain_widget,image_to_base64
 
     # Run Step 2
     bb_widget.Widget.tabWidget.setCurrentIndex(1)
+    #check if Tx with cone design and steering
+    if hasattr(bb_widget.AcSim.Widget,'DistanceConeToFocusSpinBox'): 
+        DistanceConeToFocusSpinBox=bb_widget.AcSim.Widget.DistanceConeToFocusSpinBox
+        minDistance=DistanceConeToFocusSpinBox.minimum()
+        maxDistance=DistanceConeToFocusSpinBox.maximum()
+        skinToTarget=bb_widget.AcSim.Widget.DistanceSkinLabel.property('UserData')
+        ZSteering=0.0
+        if skinToTarget >=minDistance and skinToTarget<=maxDistance:
+            DistanceConeToFocusSpinBox.setValue(skinToTarget)
+        elif skinToTarget>maxDistance:
+            DistanceConeToFocusSpinBox.setValue(maxDistance)
+            ZSteering=skinToTarget-maxDistance
+        else:
+            DistanceConeToFocusSpinBox.setValue(minDistance)
+            ZSteering=skinToTarget-minDistance
+        bb_widget.AcSim.Widget.ZSteeringSpinBox.setValue(ZSteering)
     bb_widget.AcSim.Widget.CalculateAcField.click()
 
-    # Wait for step 2 completion before continuing. Test timeouts after 15 min have past
-    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=900000)
+    # Wait for step 2 completion before continuing. Test timeouts after 30 min have past
+    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=1800000)
     qtbot.wait(1000) # Wait for plots to display
 
     # Take screenshot of step 2 results

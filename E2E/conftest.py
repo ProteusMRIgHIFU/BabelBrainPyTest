@@ -11,7 +11,7 @@ def compare_BabelBrain_Outputs(compare_data):
     def _compare_BabelBrain_Outputs(ref_folder,test_folder,tolerance,node_screenshots):
         
         # Find h5 files in folders
-        pattern = "**/*ThermalField_AllCombinations.h5"
+        pattern = "**/*DataForSim-ThermalField-Duration*.h5"
 
         h5_refs = glob.glob(os.path.join(ref_folder, pattern),recursive=True)
         h5_tests = glob.glob(os.path.join(test_folder, pattern),recursive=True)

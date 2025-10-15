@@ -154,6 +154,8 @@ for n,txelem in enumerate(TxSelUI['item']):
     entry['freqs']=freqs
     transducers.append(entry)
 
+pprint(transducers)
+
 computing_backends = [
     # {'type': 'CPU','supported_os': ['Mac','Windows','Linux']},
     {'type': 'OpenCL','supported_os': ['Windows','Linux']},
@@ -356,6 +358,8 @@ def check_data():
     # Return the fixture object with the specified attribute
     return {'isometric': isometric_check}
 
+Location =[0,0,0]
+
 @pytest.fixture()
 def compare_data(get_rmse):
 
@@ -433,6 +437,7 @@ def compare_data(get_rmse):
         mismatches = []
         
         def compare_items(name, obj1):
+            global Location
             if name not in f2:
                 logging.warning(f"{name} missing in test file")
                 mismatches.append(name)
@@ -440,6 +445,8 @@ def compare_data(get_rmse):
             obj2 = f2[name]
             if isinstance(obj1, h5py.Dataset):
                 data1, data2 = obj1[()], obj2[()]
+                if 'TargetLocation' in name:
+                    Location=data1
                 if not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
                     if data1.size > 1:
                         if len(data1.shape)==3: #we save some screenshots of projection of error
@@ -476,6 +483,10 @@ def compare_data(get_rmse):
                             base64_plot = base64.b64encode(buffer.getvalue()).decode('utf-8')
                             node_screenshots.append(base64_plot)
                             plt.close('all')
+                            if name =='TempEndFUS':
+                                MTT1=data1[Location[0],Location[1],Location[2]]
+                                MTT2=data2[Location[0],Location[1],Location[2]]
+                                logging.warning(f'MTT: {MTT1} vs {MTT2}')
                             
                         else:
                             logging.warning(f"Dataset {name} differs")   
@@ -1015,6 +1026,7 @@ def pytest_collection_modifyitems(config, items):
             ("CTX_500" in item.name and "500kHz" in item.name) or \
             "CTX_250" in item.name or \
             "DPX_500" in item.name or \
+            "ATAC" in item.name or \
             "DPXPC_300" in item.name or \
             "H246" in item.name or \
             "BSonix" in item.name or \
