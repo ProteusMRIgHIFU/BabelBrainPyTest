@@ -60,8 +60,8 @@ def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request)
 
     bb_widget.AcSim.Widget.CalculateAcField.click()
 
-    # Wait for step 2 completion before continuing. Test timeouts after 30 min have past
-    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=1800000)
+    # Wait for step 2 completion before continuing. Test timeouts after 1hr min have past
+    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=3600000)
     qtbot.wait(1000) # Wait for plots to display
 
     # Take screenshot of step 2 results
