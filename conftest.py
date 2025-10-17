@@ -31,6 +31,7 @@ from pathlib import Path
 import xmltodict
 from pprint import pprint
 import yaml
+from BabelViscoFDTD.H5pySimple import ReadFromH5py
 
 from glob import glob
 
@@ -73,8 +74,8 @@ test_trajectory_type = {
     'slicer': 1
 }
 valid_trajectories = [
-    'Deep_Target',
     'Superficial_Target',
+    'Deep_Target',
     'Skull_Target',
 ]
 invalid_trajectories = [
@@ -358,7 +359,6 @@ def check_data():
     # Return the fixture object with the specified attribute
     return {'isometric': isometric_check}
 
-Location =[0,0,0]
 
 @pytest.fixture()
 def compare_data(get_rmse):
@@ -437,7 +437,6 @@ def compare_data(get_rmse):
         mismatches = []
         
         def compare_items(name, obj1):
-            global Location
             if name not in f2:
                 logging.warning(f"{name} missing in test file")
                 mismatches.append(name)
@@ -445,8 +444,6 @@ def compare_data(get_rmse):
             obj2 = f2[name]
             if isinstance(obj1, h5py.Dataset):
                 data1, data2 = obj1[()], obj2[()]
-                if 'TargetLocation' in name:
-                    Location=data1
                 if not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
                     if data1.size > 1:
                         if len(data1.shape)==3: #we save some screenshots of projection of error
@@ -472,7 +469,7 @@ def compare_data(get_rmse):
                             plt.figure()
                             plt.imshow(diff)
                             plt.colorbar()
-                            fn=os.path.split(h5_ref_path)[1].split('_DataForSim')[0]
+                            fn=h5_ref_path.split(os.sep)[-2].split('CT=')[1].split('kHz')[0]
                             plt.title(f'{fn}\nMIP diff {dlabel} {name} Tol={tolerance}')
                             # Save the plot to a BytesIO object
                             buffer = BytesIO()
@@ -484,9 +481,15 @@ def compare_data(get_rmse):
                             node_screenshots.append(base64_plot)
                             plt.close('all')
                             if name =='TempEndFUS':
+                                Location =refH5Simple1['TargetLocation']
                                 MTT1=data1[Location[0],Location[1],Location[2]]
                                 MTT2=data2[Location[0],Location[1],Location[2]]
                                 logging.warning(f'MTT: {MTT1} vs {MTT2}')
+                            if name == 'p_map':
+                                Location =refH5Simple1['TargetLocation']
+                                p1=data1[Location[0],Location[1],Location[2]]
+                                p2=data2[Location[0],Location[1],Location[2]]
+                                logging.warning(f'Pressure at target: {p1} vs {p2}')
                             
                         else:
                             logging.warning(f"Dataset {name} differs")   
@@ -496,6 +499,9 @@ def compare_data(get_rmse):
             elif isinstance(obj1, h5py.Group):
                 pass  # groups are containers, children checked recursively
                 
+        refH5Simple1=ReadFromH5py(h5_ref_path)
+        refH5Simple2=ReadFromH5py(h5_test_path)
+        
         with h5py.File(h5_ref_path, "r") as f1, h5py.File(h5_test_path, "r") as f2:
             exact_match = f1.visititems(lambda name, obj: compare_items(name, obj1=obj))
             
