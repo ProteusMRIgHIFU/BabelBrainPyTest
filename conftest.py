@@ -444,58 +444,65 @@ def compare_data(get_rmse):
             obj2 = f2[name]
             if isinstance(obj1, h5py.Dataset):
                 data1, data2 = obj1[()], obj2[()]
-                if not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
-                    if data1.size > 1:
-                        if len(data1.shape)==3: #we save some screenshots of projection of error
-                            if np.issubdtype(data1.dtype, np.integer):
-                                diff=np.max(np.abs(data2-data1),axis=0)
-                                dlabel=''
-                                logging.warning(f"Dataset {name} differs with maximal diff of {diff.max()} (int)")
-                            else:
-                                nmrse=normalized_root_mse(data1,data2,normalization='min-max')
-                                diff=np.abs(data2-data1)
-                                diffMax=diff.max()
-                                diff[data1==0.0]=0
-                                diff[data1!=0.0]/=data1[data1!=0]
-                                diff=np.max(diff,axis=0) #MIP projection
-                                dlabel=' %'
-                                logging.warning(f"Dataset {name} differs with maximal diff of {diffMax} ({diff.max()*100} %) and NRMSE {nmrse}")
-                                if (diff.max()-diff.min())>100:
-                                    diff[diff!=0]=np.log10(diff[diff!=0])
-                                    diff[diff==0]=np.nan
+                bCorrectShape=True
+                if len(data1.shape)>1:
+                    if np.any(np.array(data1.shape)!=np.array(data1.shape)):
+                        bCorrectShape=False
+                        logging.warning(f"Dataset {name} differs in data shapes with {data1.shape} and {data2.shape}")
+                        mismatches.append(name)
+                if bCorrectShape:
+                    if not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
+                        if data1.size > 1:
+                            if len(data1.shape)==3: #we save some screenshots of projection of error
+                                if np.issubdtype(data1.dtype, np.integer):
+                                    diff=np.max(np.abs(data2-data1),axis=0)
+                                    dlabel=''
+                                    logging.warning(f"Dataset {name} differs with maximal diff of {diff.max()} (int)")
                                 else:
-                                    diff*=100
-                    
-                            plt.figure()
-                            plt.imshow(diff)
-                            plt.colorbar()
-                            fn=h5_ref_path.split(os.sep)[-2].split('CT=')[1].split('kHz')[0]
-                            plt.title(f'{fn}\nMIP diff {dlabel} {name} Tol={tolerance}')
-                            # Save the plot to a BytesIO object
-                            buffer = BytesIO()
-                            plt.savefig(buffer, format='webp')
-                            buffer.seek(0)
-                            
-                            # Encode the image data as base64 string
-                            base64_plot = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                            node_screenshots.append(base64_plot)
-                            plt.close('all')
-                            if name =='TempEndFUS':
-                                Location =refH5Simple1['TargetLocation']
-                                MTT1=data1[Location[0],Location[1],Location[2]]
-                                MTT2=data2[Location[0],Location[1],Location[2]]
-                                logging.warning(f'MTT: {MTT1} vs {MTT2}')
-                            if name == 'p_map':
-                                Location =refH5Simple1['TargetLocation']
-                                p1=data1[Location[0],Location[1],Location[2]]
-                                p2=data2[Location[0],Location[1],Location[2]]
-                                logging.warning(f'Pressure at target: {p1} vs {p2}')
-                            
+                                    nmrse=normalized_root_mse(data1,data2,normalization='min-max')
+                                    diff=np.abs(data2-data1)
+                                    diffMax=diff.max()
+                                    diff[data1==0.0]=0
+                                    diff[data1!=0.0]/=data1[data1!=0]
+                                    diff=np.max(diff,axis=0) #MIP projection
+                                    dlabel=' %'
+                                    logging.warning(f"Dataset {name} differs with maximal diff of {diffMax} ({diff.max()*100} %) and NRMSE {nmrse}")
+                                    if (diff.max()-diff.min())>100:
+                                        diff[diff!=0]=np.log10(diff[diff!=0])
+                                        diff[diff==0]=np.nan
+                                    else:
+                                        diff*=100
+                        
+                                plt.figure()
+                                plt.imshow(diff)
+                                plt.colorbar()
+                                fn=h5_ref_path.split(os.sep)[-2].split('CT=')[1].split('kHz')[0]
+                                plt.title(f'{fn}\nMIP diff {dlabel} {name} Tol={tolerance}')
+                                # Save the plot to a BytesIO object
+                                buffer = BytesIO()
+                                plt.savefig(buffer, format='webp')
+                                buffer.seek(0)
+                                
+                                # Encode the image data as base64 string
+                                base64_plot = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                                node_screenshots.append(base64_plot)
+                                plt.close('all')
+                                if name =='TempEndFUS':
+                                    Location =refH5Simple1['TargetLocation']
+                                    MTT1=data1[Location[0],Location[1],Location[2]]
+                                    MTT2=data2[Location[0],Location[1],Location[2]]
+                                    logging.warning(f'MTT: {MTT1} vs {MTT2}')
+                                if name == 'p_map':
+                                    Location =refH5Simple1['TargetLocation']
+                                    p1=data1[Location[0],Location[1],Location[2]]
+                                    p2=data2[Location[0],Location[1],Location[2]]
+                                    logging.warning(f'Pressure at target: {p1} vs {p2}')
+                                
+                            else:
+                                logging.warning(f"Dataset {name} differs")   
                         else:
-                            logging.warning(f"Dataset {name} differs")   
-                    else:
-                        logging.warning(f"Dataset {name} differs: {data1} vs {data2}")
-                    mismatches.append(name)
+                            logging.warning(f"Dataset {name} differs: {data1} vs {data2}")
+                        mismatches.append(name)
             elif isinstance(obj1, h5py.Group):
                 pass  # groups are containers, children checked recursively
                 
