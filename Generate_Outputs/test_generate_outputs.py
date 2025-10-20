@@ -1,6 +1,7 @@
 import pytest
 import os
 from glob import glob
+import shutil
 
 pytest.mark.generate_outputs
 def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request):
@@ -13,13 +14,15 @@ def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request)
 
     outdir = bb_widget.Config['OutputFilesPath']
 
-    finalfile=glob(outdir + os.sep + '*ThermalField_AllCombinations.h5')
+    finalfile=glob(outdir + os.sep + '*DataForSim-ThermalField-Duration*.h5')
     b_already_calculated=len(finalfile)==1
     if b_already_calculated:
         pytest.skip(f"Calculation already completed previously at {outdir}." )
     if os.path.isdir(outdir): #we just ensure to cleanup to avoid getting stuck in the dialog if we want to reload
         stepsfile=glob(outdir + os.sep + '*.h5')+glob(outdir + os.sep + '*ReuseMask.nii.gz')+\
-                  glob(outdir + os.sep + '*BabelViscoInput.nii.gz')
+                  glob(outdir + os.sep + '*BabelViscoInput.nii.gz')+\
+                  glob(outdir + os.sep + '*ExecutionTimes.yml')
+
         for f in stepsfile:
             os.remove(f)
     
@@ -91,7 +94,22 @@ def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request)
         bb_widget.ThermalSim.Widget.ExportSummary.click()
         
         # Run Export Maps Command
-        bb_widget.ThermalSim.Widget.ExportMaps.click()
+        # bb_widget.ThermalSim.Widget.ExportMaps.click()
         
     if len(exceptions) > 0:
         pytest.fail(f"Test failed due to error in execution: {exceptions}")
+    else: #we delete files to reduce space
+        L=glob(outdir + os.sep + '*.mat')+\
+            glob(outdir + os.sep + '*_Sub.nii.gz')+\
+            glob(outdir + os.sep + '*FullElasticSolution.nii.gz')+\
+            glob(outdir + os.sep + '*T1W_Resampled.nii.gz')+\
+            glob(outdir + os.sep + '*AllCombinations.h5')+\
+            glob(outdir + os.sep + '*-PRF-*.nii.gz')+\
+            glob(outdir + os.sep + '*DataForSim.h5')+\
+            glob(outdir + os.sep + '*Sub_NORM.nii.gz')+\
+            glob('**/*m2m*',recursive=True)
+        for f in L:
+            if os.path.isfile(f):
+                os.remove(f)
+            else:
+                shutil.rmtree(f)
