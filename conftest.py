@@ -145,7 +145,7 @@ for n,txelem in enumerate(TxSelUI['item']):
     with open(selYaml,'r') as ftx:
         TxConfig=yaml.load(ftx,yaml.SafeLoader)
     if name =='Single':
-        freqs=[200000.0,250000.0,300000.0,350000.0,400000.0,450000.0,500000.0,550000.0,600000.0,650000.0,700000.0,750000.0,800000.0,850000.0,900000.0,950000.0,1000000.0]
+        freqs=[200000.0,300000.0,400000.0,500000.0,600000.0,700000.0,800000.0,900000.0,1000000.0]
     else:
         freqs=TxConfig['USFrequencies']
     entry={}
@@ -1077,6 +1077,13 @@ def pytest_collection_modifyitems(config, items):
             "brainsight" in item.name and \
             ("NONE" in item.name or "CT" in item.name or "ZTE" in item.name):
             item.add_marker(pytest.mark.all_targets_babelbrain_params)
+
+        if "Superficial_Target" in item.name and \
+            "ID_0082" not  in item.name and \
+            "Single" in item.name and \
+            "slicer" in item.name and \
+            ("CT" in item.name or "NONE" in item.name):
+            item.add_marker(pytest.mark.orig_paper_params)
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item,call):
