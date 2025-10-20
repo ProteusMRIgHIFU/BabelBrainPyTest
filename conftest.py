@@ -1055,6 +1055,29 @@ def pytest_collection_modifyitems(config, items):
             ("NONE" in item.name or "CT" in item.name or "ZTE" in item.name):
             item.add_marker(pytest.mark.basic_babelbrain_params)
 
+        if "Deep_Target" in item.name and \
+            "ID_0082" in item.name and (\
+            ("H317" in item.name and ("250kHz" in item.name or "825kHz" in item.name)) or \
+            ("Single" in item.name and "500kHz" in item.name) or \
+            ("CTX_500" in item.name and "500kHz" in item.name) or \
+            "CTX_250" in item.name or \
+            "DPX_500" in item.name or \
+            "ATAC" in item.name or \
+            "DPXPC_300" in item.name or \
+            "H246" in item.name or \
+            "BSonix" in item.name or \
+            ("REMOPD" in item.name and "490kHz" in item.name) or \
+            "I12378" in item.name or \
+            "R15148" in item.name or \
+            "R15287" in item.name or \
+            "R15473" in item.name or \
+            "R15646" in item.name or \
+            "IGT64_500" in item.name) and \
+            "PETRA" not in item.name and \
+            "brainsight" in item.name and \
+            ("NONE" in item.name or "CT" in item.name or "ZTE" in item.name):
+            item.add_marker(pytest.mark.all_targets_babelbrain_params)
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item,call):
     outcome = yield
