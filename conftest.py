@@ -451,7 +451,7 @@ def compare_data(get_rmse):
                         logging.warning(f"Dataset {name} differs in data shapes with {data1.shape} and {data2.shape}")
                         mismatches.append(name)
                 if bCorrectShape:
-                    if not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
+                    if tolerance==0 or not np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True):
                         if data1.size > 1:
                             if len(data1.shape)==3: #we save some screenshots of projection of error
                                 if np.issubdtype(data1.dtype, np.integer):
