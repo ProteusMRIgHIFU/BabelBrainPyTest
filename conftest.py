@@ -791,9 +791,9 @@ def babelbrain_widget(request,qtbot,
         trajectory_folder = input_folder + 'Trajectories' + os.sep
         if generate_outputs:
             os.makedirs(gen_output_dir,exist_ok = True)
-            output_folder = gen_output_dir + f"{os.sep}{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
+            output_folder = gen_output_dir + f"{os.sep}{dataset['id']}_{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
         else:
-            output_folder = str(tmp_path) + f"{os.sep}{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
+            output_folder = str(tmp_path) + f"{os.sep}{dataset['id']}_{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
 
         os.makedirs(output_folder,exist_ok = True)
         # Filenames
