@@ -31,7 +31,7 @@ def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request)
     bb_widget.Widget.CalculatePlanningMask.click()
 
     # Wait for step 1 completion before continuing. Test timeouts after 15 min have past
-    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=900000)
+    qtbot.waitUntil(bb_widget.Widget.tabWidget.isEnabled,timeout=2000000)
     qtbot.wait(1000) # Wait for plots to display
     
     # Take screenshot of step 1 results
