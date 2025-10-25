@@ -109,7 +109,10 @@ def test_generate_valid_outputs(qtbot,babelbrain_widget,image_to_base64,request)
             glob(outdir + os.sep + '*Sub_NORM.nii.gz')+\
             glob(outdir + os.sep + 'CT.nii.gz')+\
             glob(outdir + os.sep + 'CT_InT1.nii.gz')+\
-            glob(outdir + os.sep + 'm2m_*')
+            glob(outdir + os.sep + 'm2m_*')+\
+            glob(outdir + os.sep + '*FullElasticSolutionPhase.nii.gz')+\
+            glob(outdir + os.sep + 'T1*.nii.gz')
+        
         for f in L:
             if os.path.isfile(f):
                 os.remove(f)
