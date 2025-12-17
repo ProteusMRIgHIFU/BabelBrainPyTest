@@ -37,6 +37,9 @@ def compare_BabelBrain_Outputs(compare_data):
         compare_h5 = compare_data["h5_data"]
         matches = []
         missing_ref_files = []
+        print('*'*50)
+        print('TOLERANCE =',tolerance)
+        print('*'*50)
         for h5_test in h5_tests:
             test_base = grab_folder_file_name(h5_test)
             h5_ref = ref_lookup.get(test_base)
