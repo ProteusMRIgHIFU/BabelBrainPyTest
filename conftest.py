@@ -495,11 +495,13 @@ def compare_data(get_rmse):
                                 if name =='TempEndFUS':
                                     Location =refH5Simple1['TargetLocation']
                                     MTT1=data1[Location[0],Location[1],Location[2]]
+                                    Location =refH5Simple2['TargetLocation']
                                     MTT2=data2[Location[0],Location[1],Location[2]]
                                     logging.warning(f'MTT: {MTT1} vs {MTT2}')
                                 if name == 'p_map':
                                     Location =refH5Simple1['TargetLocation']
                                     p1=data1[Location[0],Location[1],Location[2]]
+                                    Location =refH5Simple2['TargetLocation']
                                     p2=data2[Location[0],Location[1],Location[2]]
                                     logging.warning(f'Pressure at target: {p1} vs {p2}')
                                 
@@ -1060,8 +1062,7 @@ def pytest_collection_modifyitems(config, items):
             ("NONE" in item.name or "CT" in item.name or "ZTE" in item.name):
             item.add_marker(pytest.mark.basic_babelbrain_params)
 
-        if "Deep_Target" in item.name and \
-            "ID_0082" in item.name and (\
+        if "ID_0082" in item.name and (\
             ("H317" in item.name and ("250kHz" in item.name )) or \
             ("Single" in item.name and "500kHz" in item.name) or \
             ("CTX_500" in item.name and "500kHz" in item.name) or \
