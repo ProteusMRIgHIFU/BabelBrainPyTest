@@ -133,7 +133,7 @@ for n,txelem in enumerate(TxSelUI['item']):
     name=txelem['property']['string']
     selYaml=None
     for sl in ListYAMLTx:
-        if '/Babel'+name.replace('_','') in sl.replace('_',''):
+        if name.replace('_','') in sl.replace('_',''):
             selYaml=sl
             break
         elif name =='BSonix' and 'BSonix.yaml' in sl:
@@ -437,6 +437,7 @@ def compare_data(get_rmse):
         mismatches = []
         
         def compare_items(name, obj1):
+            logging.info(f"Comparing {name}")
             if name not in f2:
                 logging.warning(f"{name} missing in test file")
                 mismatches.append(name)
@@ -453,7 +454,10 @@ def compare_data(get_rmse):
 
                 tolerancepass=False
                 if bCorrectShape:
-                    tolerancepass=np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True)
+                    if type(data1) == bytes or type(data2)==bytes:
+                        tolerancepass = data1==data2
+                    else:
+                        tolerancepass=np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True)
 
                 if tolerance==0 or not tolerancepass:
                         if data1.size > 1:
@@ -481,7 +485,7 @@ def compare_data(get_rmse):
                                     plt.figure()
                                     plt.imshow(diff)
                                     plt.colorbar()
-                                    fn=h5_ref_path.split(os.sep)[-2].split('CT=')[1].split('kHz')[0]
+                                    fn=h5_ref_path.split(os.sep)[-2].split('CT-')[1].split('kHz')[0]
                                     plt.title(f'{fn}\nMIP diff {dlabel} {name} Tol={tolerance}')
                                     # Save the plot to a BytesIO object
                                     buffer = BytesIO()
@@ -510,6 +514,7 @@ def compare_data(get_rmse):
                         else:
                             logging.warning(f"Dataset {name} differs: {data1} vs {data2}")
                         mismatches.append(name)
+                logging.info(f"{name} matches")
             elif isinstance(obj1, h5py.Group):
                 pass  # groups are containers, children checked recursively
                 
@@ -798,9 +803,9 @@ def babelbrain_widget(request,qtbot,
         trajectory_folder = input_folder + 'Trajectories' + os.sep
         if generate_outputs:
             os.makedirs(gen_output_dir,exist_ok = True)
-            output_folder = gen_output_dir + f"{os.sep}{dataset['id']}_{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
+            output_folder = gen_output_dir + f"{os.sep}{dataset['id']}_{trajectory_type}_CT-{scan_type}_{trajectory}_{transducer['name']}_Freq-{freq}kHz_{computing_backend['type']}{os.sep}"
         else:
-            output_folder = str(tmp_path) + f"{os.sep}{dataset['id']}_{trajectory_type}_CT={scan_type}_{trajectory}_{transducer['name']}_Freq={freq}kHz_{computing_backend['type']}{os.sep}"
+            output_folder = str(tmp_path) + f"{os.sep}{dataset['id']}_{trajectory_type}_CT-{scan_type}_{trajectory}_{transducer['name']}_Freq-{freq}kHz_{computing_backend['type']}{os.sep}"
 
         os.makedirs(output_folder,exist_ok = True)
         # Filenames
