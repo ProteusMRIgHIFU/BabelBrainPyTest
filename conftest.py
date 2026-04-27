@@ -457,6 +457,9 @@ def compare_data(get_rmse):
                     if type(data1) == bytes or type(data2)==bytes:
                         tolerancepass = data1==data2
                     else:
+                        if np.isdtype(data1.dtype, "unsigned integer"):
+                            data1 = data1.astype(np.float32)
+                            data2 = data2.astype(np.float32)
                         tolerancepass=np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True)
 
                 if tolerance==0 or not tolerancepass:
