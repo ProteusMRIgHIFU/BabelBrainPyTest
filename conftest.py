@@ -52,6 +52,7 @@ def resource_path():  # needed for bundling
 from BabelBrain.BabelBrain import BabelBrain
 from BabelBrain.SelFiles.SelFiles import SelFiles
 from BabelBrain.FileManager import FileManager
+import BabelBrain.BabelBrain as bb_module # Needed to get monkeypatch working
 
 # ================================================================================================================================
 # FOLDER/FILE PATHS
@@ -174,6 +175,10 @@ spatial_step = {
 # ================================================================================================================================
 # PYTEST FIXTURES
 # ================================================================================================================================
+@pytest.fixture()
+def mock_confirm_pseudoct(monkeypatch):
+    monkeypatch.setattr(bb_module,"ConfirmPseudoCT", lambda *args, **kwargs: True)
+
 @pytest.fixture()
 def check_files_exist():
 
