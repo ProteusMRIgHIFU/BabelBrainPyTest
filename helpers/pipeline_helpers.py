@@ -42,7 +42,7 @@ import numpy as np
 import pytest
 import trimesh
 import yaml
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 from Tests.helpers.parameters import (BABELBRAIN_ROOT, COREGISTRATION, CT_TYPE_FILES,
                               CT_TYPES, DATASETS, DEFAULT_TARGET,
@@ -179,14 +179,28 @@ def babelbrain_version():
 # DIALOGS
 # ================================================================================================================================
 def auto_answer_dialogs(monkeypatch):
-    """Make modal QMessageBoxes return immediately so an unattended run never stalls.
-    Questions answer Yes so cached results are always recalculated."""
+    """Make modal dialogs return immediately so an unattended run never stalls.
+    Questions answer Yes so cached results are always recalculated, and BabelBrain's own
+    confirmation dialogs (pseudo CT histogram for ZTE/PETRA, custom transducer verification)
+    are accepted."""
     monkeypatch.setattr(QMessageBox, 'question', staticmethod(lambda *a, **k: QMessageBox.Yes))
     monkeypatch.setattr(QMessageBox, 'warning', staticmethod(lambda *a, **k: QMessageBox.Ok))
     monkeypatch.setattr(QMessageBox, 'critical', staticmethod(lambda *a, **k: QMessageBox.Ok))
     monkeypatch.setattr(QMessageBox, 'information', staticmethod(lambda *a, **k: QMessageBox.Ok))
     monkeypatch.setattr(QMessageBox, 'exec', lambda self, *a, **k: QMessageBox.Ok)
     monkeypatch.setenv('BABEL_PYTEST', '1')
+
+    # BabelBrain.py imports ConfirmPseudoCT by name, so patch it in the module the widget comes from
+    from BabelBrain.BabelBrain import BabelBrain
+    monkeypatch.setattr(sys.modules[BabelBrain.__module__], 'ConfirmPseudoCT', lambda *a, **k: True)
+
+    # Custom transducers (BabelBrain 0.8.2+) are shown in a verification dialog before being saved.
+    # Same module name SelFiles imports it under.
+    try:
+        from CreateTransducers.transducer_creator import TransducerVerificationDialog
+    except ImportError:
+        return
+    monkeypatch.setattr(TransducerVerificationDialog, 'exec', lambda self, *a, **k: QDialog.DialogCode.Accepted)
 
 
 # ================================================================================================================================

@@ -45,10 +45,6 @@ def synthetic_dataset():
     ensure_synthetic_dataset(str(SYNTHETIC_DATASET_DIR))
 
 @pytest.fixture()
-def mock_confirm_pseudoct(monkeypatch):
-    monkeypatch.setattr(bb_module,"ConfirmPseudoCT", lambda *args, **kwargs: True)
-
-@pytest.fixture()
 def check_files_exist():
 
     def _check_files_exist(fnames):

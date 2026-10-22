@@ -115,13 +115,13 @@ def _add_release_markers(item):
     """minor_release / major_release markers for the unit tests and suite consistency checks in each
     release test set (BabelBrain_Pytest_Usage.md, Tables 3 and 7). GPU unit tests get them from their
     spatial step (default_parametrize); every other unit test is in the major set, and in the minor
-    set too unless it's slow."""
+    set too unless it's slow or uses the real datasets (minor releases need no test data)."""
     if not (_in(item, UNIT_TESTS_DIR) or _in(item, CONSISTENCY_TESTS_DIR)):
         return
     if 'spatial_step' in _params(item):
         return
     item.add_marker(pytest.mark.major_release)
-    if not item.get_closest_marker('slow'):
+    if not item.get_closest_marker('slow') and not _uses_real_data(item):
         item.add_marker(pytest.mark.minor_release)
 
 

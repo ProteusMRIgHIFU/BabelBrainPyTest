@@ -227,7 +227,7 @@ SPATIAL_STEPS = {
 # conftest.py). The synthetic head runs every resolution; the full head real datasets only a
 # cheaper one, since their high resolutions take very long.
 RELEASE_SPATIAL_STEPS = {
-    'minor_release': {'synthetic': list(SPATIAL_STEPS), 'real': ['Low_Res']},
+    'minor_release': {'synthetic': list(SPATIAL_STEPS), 'real': []},  # minor releases don't use the real datasets
     'major_release': {'synthetic': list(SPATIAL_STEPS), 'real': ['Med_Res']},
 }
 

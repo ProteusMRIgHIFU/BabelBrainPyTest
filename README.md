@@ -432,7 +432,7 @@ python Tests/scripts/isolate_pytest.py --run -- Tests/E2E Tests/Regression -m "m
 
 What each set contains:
 
-- **Unit tests and consistency checks** (marked automatically): GPU unit tests run the synthetic head at every resolution in both sets, and the real datasets at one resolution only: low_res for minor releases and medium_res for major releases (`RELEASE_SPATIAL_STEPS` in [parameters.py](helpers/parameters.py)). Every other unit test and the consistency checks are in the major set, and in the minor set too unless they're slow.
+- **Unit tests and consistency checks** (marked automatically): GPU unit tests run the synthetic head at every resolution in both sets, and the real datasets at one resolution only: low_res for minor releases and medium_res for major releases (`RELEASE_SPATIAL_STEPS` in [parameters.py](helpers/parameters.py)). Every other unit test and the consistency checks are in the major set, and in the minor set too unless they're slow. The DoIntersect tests on the real datasets (`TestDoIntersectRealData`) are slow, so only major releases run them; minor releases run `TestDoIntersectSynthetic`.
 - **E2E and regression tests**: [E2E/test_e2e_release.py](E2E/test_e2e_release.py) (Table 9) and [Regression/test_regression_release.py](Regression/test_regression_release.py) (Table 10) are marked `major_release`. The minor release E2E and regression tables (Tables 5 and 6) don't list any tests yet, so the minor set has none.
 
 Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report.
