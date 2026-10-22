@@ -387,8 +387,8 @@ def pipeline(qtbot, monkeypatch, request, compare_data, image_to_base64, tmp_pat
             return bb
 
         @staticmethod
-        def assert_thermal_outputs_match(ref_dir, test_dir, tolerance, message="Outputs differ from reference"):
-            match, problems = rh.compare_thermal_outputs(ref_dir, test_dir, tolerance, screenshots, compare_data)
+        def assert_thermal_outputs_match(ref_dir, test_dir, tolerance, message="Outputs differ from reference", ignore=()):
+            match, problems = rh.compare_thermal_outputs(ref_dir, test_dir, tolerance, screenshots, compare_data, ignore)
             assert match, f"{message}:\n" + "\n".join(problems or ["see h5 tables in report"])
 
         @staticmethod

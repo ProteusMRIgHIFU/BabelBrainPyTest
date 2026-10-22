@@ -533,9 +533,9 @@ def _thermal_key(fname):
     return base[base.index('DataForSim-ThermalField'):]
 
 
-def compare_thermal_outputs(ref_folder, test_folder, tolerance, screenshots, compare_data):
-    """Compare every thermal h5 output in test_folder with its counterpart in ref_folder.
-    Returns (all_match, problems)."""
+def compare_thermal_outputs(ref_folder, test_folder, tolerance, screenshots, compare_data, ignore=()):
+    """Compare every thermal h5 output in test_folder with its counterpart in ref_folder, except the
+    datasets named in `ignore`. Returns (all_match, problems)."""
     ref_files = {_thermal_key(f): f for f in thermal_outputs(ref_folder)}
     test_files = {_thermal_key(f): f for f in thermal_outputs(test_folder)}
     problems = []
@@ -549,7 +549,7 @@ def compare_thermal_outputs(ref_folder, test_folder, tolerance, screenshots, com
     matches = []
     for key in sorted(set(ref_files) & set(test_files)):
         matches.append(compare_data['h5_data'](ref_files[key], test_files[key], screenshots,
-                                               tolerance=tolerance, label=key))
+                                               tolerance=tolerance, label=key, ignore=ignore))
     return (all(matches) and not problems), problems
 
 

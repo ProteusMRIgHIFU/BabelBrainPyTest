@@ -145,9 +145,10 @@ def _row_style(matched):
     return f"style='background-color:{color}'"
 
 
-def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None):
+def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None,ignore=()):
     """True when every dataset in h5_test_path matches h5_ref_path within `tolerance` (rtol). Adds
-    tables of all datasets, and a slice viewer of every mismatched volume, to node_screenshots."""
+    tables of all datasets, and a slice viewer of every mismatched volume, to node_screenshots.
+    Datasets named in `ignore` (e.g. 'TxSystem') are not compared."""
     mismatches = []
     scalar_results = []
     array_results = []
@@ -161,11 +162,15 @@ def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None):
             f"Reference file: {h5_ref_path}<br>"
             f"Test file: {h5_test_path}<br>"
             f"Tolerance (rtol): {tolerance}"
-            f"</div>"
+            + (f"<br>Not compared: {', '.join(ignore)}" if ignore else "")
+            + f"</div>"
         )
     })
 
     def compare_items(name, obj1):
+        if name.split('/')[-1] in ignore:
+            logging.info(f"Not comparing {name}")
+            return
         logging.info(f"Comparing {name}")
         if name not in f2:
             logging.warning(f"{name} missing in test file")
