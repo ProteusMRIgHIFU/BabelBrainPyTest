@@ -2,7 +2,7 @@
 Major release end-to-end tests (BabelBrain_Pytest_Usage.md, Table 9).
 
 e2e_test_remote_full_pipeline
-    Full pipeline offloaded to a BabelBrain job server. Uses the server in the optional
+    Full pipeline on the quick configuration (parameters.REMOTE_SIM_PARAMS) offloaded to a BabelBrain job server. Uses the server in the optional
     [Remote] section of Tests/config.ini (name, host, port, token, https), otherwise starts
     a local headless server (BabelBrain.py --serve). Only checks that the run completes.
 
@@ -55,11 +55,6 @@ SERVER_START_TIMEOUT_S = 180
 # ================================================================================================================================
 # CASES
 # ================================================================================================================================
-REMOTE_CASES = [
-    pytest.param(PipelineCase(dataset='ernie', transducer=tx, freq_khz=freq, backend='Remote'),
-                 id=f"ernie_{tx}_{freq}kHz", marks=[pytest.mark.gpu, pytest.mark.slow])
-    for tx, freq in [('Single', 500), ('H317', 250)]
-]
 
 # Slicer targets for every pair so TheraPhas isn't flipped and compares 1 to 1 with its custom version
 CUSTOM_TX_CASES = [
@@ -71,6 +66,7 @@ CUSTOM_TX_CASES = [
 ]
 
 # Parameter sets in parameters.E2E_CASES
+REMOTE_CASES = cases_from_spec(E2E_CASES['e2e_test_remote_full_pipeline'], [pytest.mark.slow])
 MULTIPOINT_CASES = cases_from_spec(E2E_CASES['e2e_test_multipoint_full_pipeline'], [pytest.mark.slow])
 COMBINED_TRAJECTORIES_CASES = cases_from_spec(E2E_CASES['e2e_test_combined_trajectories_full_pipeline'],
                                               [pytest.mark.slow])

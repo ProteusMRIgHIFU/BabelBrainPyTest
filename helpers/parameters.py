@@ -286,6 +286,13 @@ MULTIPOINT_SIM_PARAMS = {
     'multipoint_profile': DEFAULT_MULTIPOINT_PROFILE,
 }
 
+# Remote server on the quick configuration: the whole pipeline is offloaded to a BabelBrain job server
+# (the server, not a local GPU backend, is the computing engine). Run as e2e_test_remote_full_pipeline.
+REMOTE_SIM_PARAMS = {
+    **QUICK_SIM_PARAMS,
+    'backends': ['Remote'],
+}
+
 # Combined trajectories on the quick configuration: a trajectory file with a left and a right
 # target, each simulated on its own tab and then merged with Combine Trajectories in steps 2 and 3.
 # Run as e2e_test_combined_trajectories_full_pipeline.
@@ -344,6 +351,7 @@ REGRESSION_CASES = {
 # E2E/test_e2e_release.py). Fields as in REGRESSION_CASES. These only check that the feature runs
 # through and writes its outputs, they aren't compared against reference outputs.
 E2E_CASES = {
+    'e2e_test_remote_full_pipeline': REMOTE_SIM_PARAMS,
     'e2e_test_multipoint_full_pipeline': MULTIPOINT_SIM_PARAMS,
     'e2e_test_combined_trajectories_full_pipeline': COMBINED_TRAJECTORIES_SIM_PARAMS,
 }

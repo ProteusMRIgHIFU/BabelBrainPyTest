@@ -844,11 +844,33 @@ Major releases should exercise the main supported workflows across representativ
     <!-- e2e_test_remote_full_pipeline -->
     <tr>
       <td>e2e_test_remote_full_pipeline</td>
-      <td>&lt;parameter_combination&gt;</td>
+      <td>
+        <b>Computing backend:</b><br>
+        <ul>
+          <li>Remote server (the [Remote] server in config.ini, otherwise a local headless BabelBrain server)</li>
+        </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>ernie</li>
+        </ul>
+        <b>CT Type:</b><br>
+        <ul>
+          <li>NONE</li>
+        </ul>
+        <b>Thermal Profile:</b><br>
+        <ul>
+          <li>pytest_thermal_profile_1</li>
+        </ul>
+        <b>Transducer/Frequency/Trajectory:</b>
+        <ul>
+          <li>Single/500kHz/Superficial Target (left)</li>
+        </ul>
+      </td>
       <td>
         <ul>
-          <li>Test full workflow using remote server</li>
+          <li>Test full workflow using remote server, on the quick configuration (QUICK_SIM_PARAMS)</li>
           <li>Don't care too much about results so doesn't need to be a regression test</li>
+          <li>1 total test</li>
         </ul>
       </td>
     </tr>
