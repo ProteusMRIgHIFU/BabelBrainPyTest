@@ -110,6 +110,21 @@ def case_param(case, marks=()):
     return pytest.param(case, id=case.case_id, marks=[pytest.mark.gpu, *marks])
 
 
+def cases_from_spec(spec, marks=()):
+    """pytest params for every combination (backends x ct_types x transducers x
+    soft_tissue_segmentation) of a parameter set from parameters.REGRESSION_CASES/E2E_CASES."""
+    return [case_param(PipelineCase(dataset=spec['dataset'], transducer=tx, freq_khz=freq, backend=backend,
+                                    target=spec['target'], trajectory_type=spec['trajectory_type'], ct_type=ct_type,
+                                    thermal_profile=spec['thermal_profile'],
+                                    multipoint_profile=spec['multipoint_profile'],
+                                    segment_soft_tissue=segment, last_step=spec['last_step']),
+                       marks=marks)
+            for backend in spec['backends']
+            for ct_type in spec['ct_types']
+            for tx, freq in spec['transducers']
+            for segment in spec['soft_tissue_segmentation']]
+
+
 # ================================================================================================================================
 # INPUT RESOLUTION
 # ================================================================================================================================
@@ -355,9 +370,21 @@ def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False
 # ================================================================================================================================
 # PIPELINE EXECUTION
 # ================================================================================================================================
+def _step_finished(bb, step):
+    """True once BabelBrain is idle after `step`. Step 1 runs the trajectories of a combined
+    trajectory file one after another and re-enables the GUI between them, so it's only finished
+    once the last trajectory is done and no next one is queued."""
+    if not bb.Widget.tabWidget.isEnabled():
+        return False
+    if step == 1:
+        return (getattr(bb, '_TrajectoryNumber', 0) >= trajectory_count(bb) - 1
+                and not getattr(bb, '_bRunNextTrajectory', False))
+    return True
+
+
 def _wait_for_step(qtbot, bb, step, screenshots, image_to_base64):
     try:
-        qtbot.waitUntil(bb.Widget.tabWidget.isEnabled, timeout=STEP_TIMEOUTS_MS[step])
+        qtbot.waitUntil(lambda: _step_finished(bb, step), timeout=STEP_TIMEOUTS_MS[step])
     except qtbot.TimeoutError as error:
         raise PipelineError(f"Step {step} did not finish within {STEP_TIMEOUTS_MS[step] / 60000:.0f} min") from error
     qtbot.wait(1000)  # Wait for plots to display
@@ -386,9 +413,42 @@ def _set_cone_distance(bb):
     bb.AcSim.Widget.ZSteeringSpinBox.setValue(z_steering)
 
 
+def trajectory_count(bb):
+    """Number of trajectories BabelBrain loaded from the trajectory file. Config['ID'] is a list
+    in versions that support combined trajectory files, and a single ID string before that."""
+    ids = bb.Config['ID']
+    return len(ids) if isinstance(ids, (list, tuple)) else 1
+
+
+def _select_trajectory_tab(step_widget, index):
+    """Show trajectory `index` in a step 2/3 panel (only multi trajectory versions have tabs), as a
+    user clicking its tab would. Fails if the panel then acts on another trajectory than the one
+    shown, since its Calculate button would run the wrong trajectory."""
+    if not hasattr(step_widget, '_txTabs'):
+        return
+    step_widget._txTabs.setCurrentIndex(index)
+    active = step_widget._TrajectoryNumber
+    if active != index or step_widget.Widget is not step_widget._Widgets[index]:
+        raise PipelineError(f"{type(step_widget).__name__} shows trajectory tab {index} but its active trajectory "
+                            f"is {active}: Calculate would run trajectory {active}")
+
+
+def _combine_trajectories(qtbot, bb, step_widget, step, screenshots, image_to_base64):
+    """Click Combine Trajectories in a step 2/3 panel, once every trajectory of that step is done."""
+    button = getattr(step_widget.Widget, 'CombineTrajectories', None)
+    if button is None or not button.isEnabled():
+        raise PipelineError(f"Combine Trajectories is not available in step {step} after running every trajectory")
+    button.click()
+    _wait_for_step(qtbot, bb, step, screenshots, image_to_base64)
+
+
 def run_pipeline(qtbot, bb, last_step=3, screenshots=None, image_to_base64=None, export_maps=True):
     """Run BabelBrain steps 1..last_step (plus exports after step 3), adding a screenshot of the GUI
-    after each step to `screenshots`. Raises PipelineError on failure."""
+    after each step to `screenshots`. Raises PipelineError on failure.
+
+    With a combined trajectory file (several targets), steps 2 and 3 run on every trajectory tab
+    and then merge them with Combine Trajectories; the exports are then of the Merged tab."""
+    n_trajectories = trajectory_count(bb)
     bb.testing_error = False
     bb.Widget.CalculatePlanningMask.click()
     _wait_for_step(qtbot, bb, 1, screenshots, image_to_base64)
@@ -396,15 +456,23 @@ def run_pipeline(qtbot, bb, last_step=3, screenshots=None, image_to_base64=None,
         return
 
     bb.Widget.tabWidget.setCurrentIndex(1)
-    _set_cone_distance(bb)
-    bb.AcSim.Widget.CalculateAcField.click()
-    _wait_for_step(qtbot, bb, 2, screenshots, image_to_base64)
+    for index in range(n_trajectories):
+        _select_trajectory_tab(bb.AcSim, index)
+        _set_cone_distance(bb)
+        bb.AcSim.Widget.CalculateAcField.click()
+        _wait_for_step(qtbot, bb, 2, screenshots, image_to_base64)
+    if n_trajectories > 1:
+        _combine_trajectories(qtbot, bb, bb.AcSim, 2, screenshots, image_to_base64)
     if last_step == 2:
         return
 
     bb.Widget.tabWidget.setCurrentIndex(2)
-    bb.ThermalSim.Widget.CalculateThermal.click()
-    _wait_for_step(qtbot, bb, 3, screenshots, image_to_base64)
+    for index in range(n_trajectories):
+        _select_trajectory_tab(bb.ThermalSim, index)
+        bb.ThermalSim.Widget.CalculateThermal.click()
+        _wait_for_step(qtbot, bb, 3, screenshots, image_to_base64)
+    if n_trajectories > 1:
+        _combine_trajectories(qtbot, bb, bb.ThermalSim, 3, screenshots, image_to_base64)
 
     with qtbot.captureExceptions() as exceptions:
         bb.ThermalSim.Widget.ExportSummary.click()

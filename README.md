@@ -336,7 +336,7 @@ The `basic_babelbrain_params` marker selects the basic configuration, the standa
 
 It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The major release `regression_test_full_pipeline` (see [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), Table 10) runs this same configuration: its `REGRESSION_CASES` entry is `BASIC_PARAMS`, so changing the configuration there updates both.
 
-The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_SIM_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration. Multipoint focusing is tested by `regression_test_full_pipeline_multipoint` instead, on the quick configuration (`QUICK_SIM_PARAMS`: ernie, MRI only, superficial target) with H317 at 250 kHz, since multipoint profiles need a phased array.
+The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_SIM_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration. Multipoint focusing is tested by the E2E test `e2e_test_multipoint_full_pipeline` instead, on the quick configuration (`QUICK_SIM_PARAMS`: ernie, MRI only, superficial target) with H317 at 250 kHz, since multipoint profiles need a phased array.
 
 ```bash
 pytest -k "test_full_pipeline_normal" -m "intensive_babelbrain_params"
@@ -397,7 +397,7 @@ The html report has one section per compared subfolder (parameter set/device), e
 
 ## Release E2E tests
 
-[E2E/test_e2e_release.py](E2E/test_e2e_release.py) holds the major release E2E tests (remote server and custom transducer full pipelines, Table 9 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)).
+[E2E/test_e2e_release.py](E2E/test_e2e_release.py) holds the major release E2E tests (remote server, custom transducer, multipoint and combined trajectories full pipelines, Table 9 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)).
 
 # Generating outputs
 
@@ -443,7 +443,7 @@ The regression tests in [Regression](Regression) generate their outputs first (`
 pytest Tests/Regression -m generate_outputs
 ```
 
-The parameters of each regression test (one entry per row of Table 10: dataset, trajectory, target, scan types, transducers, profiles, ...) are in `REGRESSION_CASES` in [parameters.py](helpers/parameters.py); change a row there and the regression cases and the consistency checks follow. `regression_test_full_pipeline` and `regression_test_full_pipeline_intensive` use the basic and intensive configurations, `BASIC_PARAMS` and `INTENSIVE_SIM_PARAMS`, so they're edited there (and `regression_test_full_pipeline_multipoint` uses `MULTIPOINT_SIM_PARAMS`, built on `QUICK_SIM_PARAMS`) and the `basic_babelbrain_params` / `intensive_babelbrain_params` markers follow too. [test_suite_consistency.py](Consistency/test_suite_consistency.py) checks that every dataset, target, scan type, transducer/frequency and input file a case names exists.
+The parameters of each regression test (one entry per row of Table 10: dataset, trajectory, target, scan types, transducers, profiles, ...) are in `REGRESSION_CASES` in [parameters.py](helpers/parameters.py); change a row there and the regression cases and the consistency checks follow. `regression_test_full_pipeline` and `regression_test_full_pipeline_intensive` use the basic and intensive configurations, `BASIC_PARAMS` and `INTENSIVE_SIM_PARAMS`, so they're edited there and the `basic_babelbrain_params` / `intensive_babelbrain_params` markers follow too. The E2E tests that run a parameter set, `e2e_test_multipoint_full_pipeline` and `e2e_test_combined_trajectories_full_pipeline` (Table 9), are in `E2E_CASES` and use `MULTIPOINT_SIM_PARAMS` and `COMBINED_TRAJECTORIES_SIM_PARAMS`, both built on the quick configuration `QUICK_SIM_PARAMS`. [test_suite_consistency.py](Consistency/test_suite_consistency.py) checks that every dataset, target, scan type, transducer/frequency and input file a regression or E2E case names exists.
 
 Tests for features an older BabelBrain version doesn't have (remote servers, custom transducers, PlanTUS) are skipped automatically.
 

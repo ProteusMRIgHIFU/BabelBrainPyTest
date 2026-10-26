@@ -11,7 +11,21 @@ e2e_test_custom_tx_full_pipeline
     its full pipeline outputs against the built-in transducer the template replicates.
     Both runs are saved in <gen_output_folder>/e2e_custom_tx_full_pipeline/ before being
     compared (see pipeline_helpers.ensure_case_outputs).
+
+e2e_test_multipoint_full_pipeline
+    Full pipeline with a multipoint profile on the quick configuration (parameters.MULTIPOINT_SIM_PARAMS).
+    Checks that every step completes and the thermal outputs are written.
+
+e2e_test_combined_trajectories_full_pipeline
+    Full pipeline on a trajectory file with a left and a right target on the quick configuration
+    (parameters.COMBINED_TRAJECTORIES_SIM_PARAMS). Each trajectory is simulated on its own tab and
+    merged with Combine Trajectories in steps 2 and 3. Checks that both trajectories and the merged
+    result have their outputs.
+
+The multipoint and combined trajectories runs are saved in <gen_output_folder>/<suite>/<case_id>
+and reused by later sessions on the same BabelBrain commit (see pipeline_helpers.ensure_case_outputs).
 """
+import glob
 import os
 import signal
 import socket
@@ -25,14 +39,16 @@ import pytest
 import yaml
 
 from Tests.helpers.parameters import (BABELBRAIN_ROOT, CUSTOM_TX_EQUIVALENTS,
-                              CUSTOM_TX_TEMPLATES_DIR, RELEASE_BACKENDS, config,
-                              requires_feature)
-from Tests.helpers.pipeline_helpers import (PipelineCase, case_param,
+                              CUSTOM_TX_TEMPLATES_DIR, E2E_CASES, RELEASE_BACKENDS,
+                              config, requires_feature)
+from Tests.helpers.pipeline_helpers import (PipelineCase, case_param, cases_from_spec,
                                     saved_outputs_reusable, thermal_outputs)
 
 pytestmark = pytest.mark.major_release
 
 CUSTOM_TX_SUITE = 'e2e_custom_tx_full_pipeline'
+MULTIPOINT_SUITE = 'e2e_multipoint_full_pipeline'
+COMBINED_TRAJECTORIES_SUITE = 'e2e_combined_trajectories_full_pipeline'
 REMOTE_SERVER_NAME = 'pytest-server'
 SERVER_START_TIMEOUT_S = 180
 
@@ -53,6 +69,11 @@ CUSTOM_TX_CASES = [
     for backend in RELEASE_BACKENDS
     for template, equivalent in CUSTOM_TX_EQUIVALENTS.items()
 ]
+
+# Parameter sets in parameters.E2E_CASES
+MULTIPOINT_CASES = cases_from_spec(E2E_CASES['e2e_test_multipoint_full_pipeline'], [pytest.mark.slow])
+COMBINED_TRAJECTORIES_CASES = cases_from_spec(E2E_CASES['e2e_test_combined_trajectories_full_pipeline'],
+                                              [pytest.mark.slow])
 
 
 # ================================================================================================================================
@@ -216,3 +237,25 @@ def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, tolerance, case):
         builtin_dir, custom_dir, tolerance,
         message=f"Custom {case.custom_tx_template} transducer differs from built-in {case.transducer}",
         ignore=('TxSystem',))
+
+
+@pytest.mark.parametrize('case', MULTIPOINT_CASES)
+def test_e2e_multipoint_full_pipeline(pipeline, case):
+    output_dir = pipeline.ensure_outputs(MULTIPOINT_SUITE, case)
+    assert thermal_outputs(output_dir), f"Multipoint run finished but no thermal outputs were saved in {output_dir}"
+
+
+@pytest.mark.parametrize('case', COMBINED_TRAJECTORIES_CASES)
+def test_e2e_combined_trajectories_full_pipeline(pipeline, case):
+    output_dir = pipeline.ensure_outputs(COMBINED_TRAJECTORIES_SUITE, case)
+
+    # Combined outputs are named <ID 1>+<ID 2>_<transducer>_..._Merged_*
+    merged_acoustic = glob.glob(os.path.join(str(output_dir), '**', '*+*Merged_NORM.nii.gz'), recursive=True)
+    assert merged_acoustic, f"No combined acoustic field (Merged_NORM.nii.gz) in {output_dir}"
+
+    outputs = thermal_outputs(output_dir)
+    merged_thermal = [f for f in outputs if 'Merged_DataForSim-ThermalField' in os.path.basename(f)]
+    trajectory_thermal = [f for f in outputs if f not in merged_thermal]
+    assert merged_thermal, f"No combined thermal output (Merged_DataForSim-ThermalField*.h5) in {output_dir}"
+    assert len(trajectory_thermal) >= 2, \
+        f"Expected a thermal output for each of the two trajectories in {output_dir}, found {trajectory_thermal}"

@@ -47,7 +47,7 @@ def test_gui_options_match_test_labels(combo_name):
 # ================================================================================================================================
 def _referenced_transducers():
     """(where, transducer, kHz) for every transducer/frequency the tests name explicitly."""
-    refs = [(name, tx, f) for name, spec in P.REGRESSION_CASES.items() for tx, f in spec['transducers']]
+    refs = [(name, tx, f) for name, spec in P.PIPELINE_CASE_SPECS.items() for tx, f in spec['transducers']]
     refs += [('CUSTOM_TX_EQUIVALENTS', eq['transducer'], eq['freq_khz']) for eq in P.CUSTOM_TX_EQUIVALENTS.values()]
     for marker, rule in P.MARKER_TRANSDUCERS.items():
         for tx, freqs in rule['frequencies'].items():
@@ -75,11 +75,11 @@ def test_every_transducer_type_has_full_pipeline_regression():
     assert not missing, f"Transducer type(s) {missing} have no transducer in BASIC_PARAMS (regression_test_full_pipeline)"
 
 
-@pytest.mark.parametrize('name', sorted(P.REGRESSION_CASES))
+@pytest.mark.parametrize('name', sorted(P.PIPELINE_CASE_SPECS))
 def test_regression_case_options_exist(name):
-    """Every dataset, trajectory type, target and scan type a regression case names is one the tests
-    and the BabelBrain version under test know."""
-    spec = P.REGRESSION_CASES[name]
+    """Every dataset, trajectory type, target and scan type a regression or E2E case names is one
+    the tests and the BabelBrain version under test know."""
+    spec = P.PIPELINE_CASE_SPECS[name]
     targets = {**P.VALID_INDIVIDUAL_TARGETS, **P.VALID_COMBINED_TARGETS}
     assert spec['dataset'] in P.DATASETS, f"{name}: unknown dataset {spec['dataset']}"
     assert spec['target'] in targets, f"{name}: unknown target {spec['target']}"
@@ -128,8 +128,8 @@ def _required_inputs():
             for target in P.TESTED_INDIVIDUAL_TARGETS:
                 files.append(str(P.trajectory_file(trajectory_type, ds['id'], target)))
     files.append(str(P.THERMAL_PROFILES_DIR / P.DEFAULT_THERMAL_PROFILE))
-    # Everything each regression case reads
-    for spec in P.REGRESSION_CASES.values():
+    # Everything each regression and E2E case reads
+    for spec in P.PIPELINE_CASE_SPECS.values():
         ds = P.DATASETS[spec['dataset']]
         files.append(str(P.trajectory_file(spec['trajectory_type'], ds['id'], spec['target'])))
         files.append(str(P.THERMAL_PROFILES_DIR / spec['thermal_profile']))

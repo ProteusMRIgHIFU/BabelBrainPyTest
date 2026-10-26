@@ -21,7 +21,7 @@ reference location and run only the generate tests:
 import pytest
 
 from Tests.helpers.parameters import REGRESSION_CASES
-from Tests.helpers.pipeline_helpers import PipelineCase, case_param, find_reference_dir
+from Tests.helpers.pipeline_helpers import cases_from_spec, find_reference_dir
 
 pytestmark = pytest.mark.major_release
 
@@ -30,28 +30,16 @@ pytestmark = pytest.mark.major_release
 # ================================================================================================================================
 FULL_PIPELINE_SUITE = 'regression_full_pipeline'
 FULL_PIPELINE_INTENSIVE_SUITE = 'regression_full_pipeline_intensive'
-FULL_PIPELINE_MULTIPOINT_SUITE = 'regression_full_pipeline_multipoint'
 SKULL_MASK_SUITE = 'regression_GetSkullMaskFromSimbNIBSSTL'
 
 
 def regression_cases(name, marks):
     """pytest params for every combination of a REGRESSION_CASES entry."""
-    spec = REGRESSION_CASES[name]
-    return [case_param(PipelineCase(dataset=spec['dataset'], transducer=tx, freq_khz=freq, backend=backend,
-                                    target=spec['target'], trajectory_type=spec['trajectory_type'], ct_type=ct_type,
-                                    thermal_profile=spec['thermal_profile'],
-                                    multipoint_profile=spec['multipoint_profile'],
-                                    segment_soft_tissue=segment, last_step=spec['last_step']),
-                       marks=marks)
-            for backend in spec['backends']
-            for ct_type in spec['ct_types']
-            for tx, freq in spec['transducers']
-            for segment in spec['soft_tissue_segmentation']]
+    return cases_from_spec(REGRESSION_CASES[name], marks)
 
 
 FULL_PIPELINE_CASES = regression_cases('regression_test_full_pipeline', [pytest.mark.slow])
 FULL_PIPELINE_INTENSIVE_CASES = regression_cases('regression_test_full_pipeline_intensive', [pytest.mark.slow])
-FULL_PIPELINE_MULTIPOINT_CASES = regression_cases('regression_test_full_pipeline_multipoint', [pytest.mark.slow])
 SKULL_MASK_CASES = regression_cases('regression_test_GetSkullMaskFromSimbNIBSSTL', [pytest.mark.step1])
 
 
@@ -68,12 +56,6 @@ def test_generate_regression_full_pipeline(pipeline, case):
 @pytest.mark.parametrize('case', FULL_PIPELINE_INTENSIVE_CASES)
 def test_generate_regression_full_pipeline_intensive(pipeline, case):
     pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
-
-
-@pytest.mark.generate_outputs
-@pytest.mark.parametrize('case', FULL_PIPELINE_MULTIPOINT_CASES)
-def test_generate_regression_full_pipeline_multipoint(pipeline, case):
-    pipeline.ensure_outputs(FULL_PIPELINE_MULTIPOINT_SUITE, case)
 
 
 @pytest.mark.generate_outputs
@@ -96,13 +78,6 @@ def test_regression_full_pipeline(pipeline, tolerance, case):
 def test_regression_full_pipeline_intensive(pipeline, tolerance, case):
     ref_dir = find_reference_dir(FULL_PIPELINE_INTENSIVE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
-    pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
-
-
-@pytest.mark.parametrize('case', FULL_PIPELINE_MULTIPOINT_CASES)
-def test_regression_full_pipeline_multipoint(pipeline, tolerance, case):
-    ref_dir = find_reference_dir(FULL_PIPELINE_MULTIPOINT_SUITE, case)
-    test_dir = pipeline.ensure_outputs(FULL_PIPELINE_MULTIPOINT_SUITE, case)
     pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
 
 

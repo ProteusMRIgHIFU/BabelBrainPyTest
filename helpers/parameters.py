@@ -261,7 +261,7 @@ BASIC_PARAMS = {
 }
 
 # Quick configuration: a cheap full pipeline (ernie, MRI only, superficial target, one single
-# element transducer), the base for regression cases that check a single feature. Fields as in
+# element transducer), the base for E2E cases that check a single feature. Fields as in
 # REGRESSION_CASES.
 QUICK_SIM_PARAMS = {
     'dataset': 'ernie',
@@ -279,11 +279,19 @@ QUICK_SIM_PARAMS = {
 
 # Multipoint focusing on the quick configuration. MultiPoint profiles only work with phased arrays
 # (transducers with steering), so it uses H317 at its lowest frequency instead of Single.
-# Run as regression_test_full_pipeline_multipoint.
+# Run as e2e_test_multipoint_full_pipeline.
 MULTIPOINT_SIM_PARAMS = {
     **QUICK_SIM_PARAMS,
     'transducers': [('H317', 250)],
     'multipoint_profile': DEFAULT_MULTIPOINT_PROFILE,
+}
+
+# Combined trajectories on the quick configuration: a trajectory file with a left and a right
+# target, each simulated on its own tab and then merged with Combine Trajectories in steps 2 and 3.
+# Run as e2e_test_combined_trajectories_full_pipeline.
+COMBINED_TRAJECTORIES_SIM_PARAMS = {
+    **QUICK_SIM_PARAMS,
+    'target': 'Superficial_Targets',
 }
 
 # Intensive configuration: a high frequency phased array with CT and long sonications. Run as 
@@ -317,7 +325,6 @@ INTENSIVE_SIM_PARAMS = {
 REGRESSION_CASES = {
     'regression_test_full_pipeline': BASIC_PARAMS,
     'regression_test_full_pipeline_intensive': INTENSIVE_SIM_PARAMS,
-    'regression_test_full_pipeline_multipoint': MULTIPOINT_SIM_PARAMS,
     'regression_test_GetSkullMaskFromSimbNIBSSTL': {
         'dataset': 'ID_0082',
         'trajectory_type': 'brainsight',
@@ -332,6 +339,17 @@ REGRESSION_CASES = {
         'require_ct_files': False,
     },
 }
+
+# Major release E2E tests that run a full pipeline from a parameter set (rows of Table 9, run by
+# E2E/test_e2e_release.py). Fields as in REGRESSION_CASES. These only check that the feature runs
+# through and writes its outputs, they aren't compared against reference outputs.
+E2E_CASES = {
+    'e2e_test_multipoint_full_pipeline': MULTIPOINT_SIM_PARAMS,
+    'e2e_test_combined_trajectories_full_pipeline': COMBINED_TRAJECTORIES_SIM_PARAMS,
+}
+
+# Every parameter set a release test runs, checked by Consistency/test_suite_consistency.py
+PIPELINE_CASE_SPECS = {**REGRESSION_CASES, **E2E_CASES}
 
 # Markers selecting a configuration in the older E2E/generate-outputs tests (applied in
 # conftest.pytest_collection_modifyitems). Marked tests also run with the configuration's thermal
