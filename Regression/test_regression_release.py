@@ -7,7 +7,7 @@ Each regression test comes in two parts:
                           <gen_output_folder>/<suite>/<case_id> (marked complete only
                           once the run succeeded). Pytest runs all of these first.
   * test_<name>           compares the saved outputs with the reference outputs in
-                          <ref_output_folder_1>/<suite>/<case_id> at 0/1/5% tolerance.
+                          <ref_output_folder_1>/<suite>/<case_id> (they must match exactly).
                           It generates the case itself if needed, so it can also be
                           selected on its own.
 
@@ -68,21 +68,21 @@ def test_generate_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, case):
 # COMPARE AGAINST REFERENCE
 # ================================================================================================================================
 @pytest.mark.parametrize('case', FULL_PIPELINE_CASES)
-def test_regression_full_pipeline(pipeline, tolerance, case):
+def test_regression_full_pipeline(pipeline, case):
     ref_dir = find_reference_dir(FULL_PIPELINE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_SUITE, case)
-    pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
+    pipeline.assert_thermal_outputs_match(ref_dir, test_dir)
 
 
 @pytest.mark.parametrize('case', FULL_PIPELINE_INTENSIVE_CASES)
-def test_regression_full_pipeline_intensive(pipeline, tolerance, case):
+def test_regression_full_pipeline_intensive(pipeline, case):
     ref_dir = find_reference_dir(FULL_PIPELINE_INTENSIVE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
-    pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
+    pipeline.assert_thermal_outputs_match(ref_dir, test_dir)
 
 
 @pytest.mark.parametrize('case', SKULL_MASK_CASES)
-def test_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, tolerance, case):
+def test_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, case):
     ref_dir = find_reference_dir(SKULL_MASK_SUITE, case)
     test_dir = pipeline.ensure_outputs(SKULL_MASK_SUITE, case)
-    pipeline.assert_all_outputs_match(ref_dir, test_dir, tolerance)
+    pipeline.assert_all_outputs_match(ref_dir, test_dir)

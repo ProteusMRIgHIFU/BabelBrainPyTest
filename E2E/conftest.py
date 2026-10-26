@@ -30,7 +30,7 @@ def pytest_generate_tests(metafunc):
 
 @pytest.fixture
 def compare_BabelBrain_Outputs(compare_data):
-    def _compare_BabelBrain_Outputs(ref_folder,test_folder,tolerance,node_screenshots):
+    def _compare_BabelBrain_Outputs(ref_folder,test_folder,node_screenshots,tolerance=0):
         
         # Find h5 files in folders
         pattern = "**/*DataForSim-ThermalField-Duration*.h5"

@@ -85,12 +85,6 @@ def default_parametrize(metafunc):
         metafunc.parametrize('spatial_step', [pytest.param(value, id=key, marks=RES_MARKS.get(key, []))
                                               for key, value in SPATIAL_STEPS.items()])
 
-    if wants('tolerance'):
-        metafunc.parametrize('tolerance',
-                             [pytest.param(0, marks=pytest.mark.tol_0, id="0%_tolerance"),
-                              pytest.param(0.01, marks=pytest.mark.tol_1, id="1%_tolerance"),
-                              pytest.param(0.05, marks=pytest.mark.tol_5, id="5%_tolerance")])
-
 
 # ================================================================================================================================
 # MARKERS

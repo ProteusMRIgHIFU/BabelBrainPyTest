@@ -226,11 +226,11 @@ def test_generate_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
 
 @requires_feature('custom_transducers')
 @pytest.mark.parametrize('case', CUSTOM_TX_CASES)
-def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, tolerance, case):
+def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
     builtin_dir, custom_dir = _custom_tx_case_outputs(pipeline, custom_tx_root, case)
     # TxSystem holds the transducer's name, which differs between the custom and built-in transducer
     pipeline.assert_thermal_outputs_match(
-        builtin_dir, custom_dir, tolerance,
+        builtin_dir, custom_dir,
         message=f"Custom {case.custom_tx_template} transducer differs from built-in {case.transducer}",
         ignore=('TxSystem',))
 

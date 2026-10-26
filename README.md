@@ -314,7 +314,6 @@ End-to-end tests run the full BabelBrain pipeline. They are parametrized by the 
 - Transducer: Single, CTX_500, ...
 - Frequency: depends on the transducer
 - Computing backend: CUDA, OpenCL, Metal, MLX
-- Tolerance, for tests comparing outputs: 0% (`tol_0`), 1% (`tol_1`), 5% (`tol_5`)
 
 That is over 100,000 versions of one full pipeline test, so narrow the selection down. Either name the parameters:
 
@@ -368,11 +367,7 @@ then run
 pytest -k "test_full_pipeline_regression_normal" -m "basic_babelbrain_params"
 ```
 
-This runs every tolerance (0%, 1%, 5%). For only one, add its marker:
-
-```bash
-pytest -k "test_full_pipeline_regression_normal and MLX" -m "basic_babelbrain_params and tol_0"
-```
+Outputs are compared with 0 tolerance, so any difference from the reference fails the test and shows up in the report.
 
 ## test_full_pipeline_two_outputs
 
@@ -393,7 +388,7 @@ pytest -k "test_full_pipeline_two_outputs"
 
 Tolerances are selected as above. There is no `basic_babelbrain_params` marker here: it applies when generating the outputs beforehand.
 
-The html report has one section per compared subfolder (parameter set/device), each showing the reference and test file paths and the tolerance. For each mismatched 3D field it embeds a slice viewer (reference, test and difference side by side, with a fixed colour scale across slices). Each viewer samples up to 24 slices spread evenly across the volume, to keep the report size reasonable. Mismatched single values (e.g. scalar summary metrics) are listed in a table with their reference and test values and absolute and relative differences.
+The html report has one section per compared subfolder (parameter set/device), each showing the reference and test file paths. For each mismatched 3D field it embeds a slice viewer (reference, test and difference side by side, with a fixed colour scale across slices). Each viewer samples up to 24 slices spread evenly across the volume, to keep the report size reasonable. Mismatched single values (e.g. scalar summary metrics) are listed in a table with their reference and test values and absolute and relative differences.
 
 ## Release E2E tests
 
