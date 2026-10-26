@@ -475,6 +475,19 @@ Unit tests should focus primarily on code affected by the release.
         </ul>
       </td>
     </tr>
+    <!-- test_nifti_viewer.py (all tests) -->
+    <tr>
+      <td>test_nifti_viewer.py (all tests)</td>
+      <td>
+        None (small synthetic volumes, no GPU or test data needed)
+      </td>
+      <td>
+        <ul>
+          <li>VTK visualization window (GUIComponents/nifti_viewer.py): affine/RAS geometry, NIfTI loading, colour maps and cutoff, slice navigation in affine and medical modes, layer controls, overlay removal, window/level reset, screenshots, one viewer per trajectory</li>
+          <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 
@@ -508,11 +521,24 @@ Integration testing should cover the primary interactions affected by the releas
     </tr>
   </thead>
   <tbody>
-    <!-- &lt;integration_test_1&gt; -->
+    <!-- test_vtk_visualization.py (all tests) -->
     <tr>
-      <td>&lt;integration_test_1&gt;</td>
-      <td>&lt;parameter_combination&gt;</td>
-      <td>&lt;reason&gt;</td>
+      <td>test_vtk_visualization.py (all tests)</td>
+      <td>
+        <b>Trajectories:</b><br>
+        <ul>
+          <li>Single trajectory</li>
+          <li>Two trajectories (combined trajectory file)</li>
+        </ul>
+        Synthetic Step 1/2/3 results, no GPU or test data needed
+      </td>
+      <td>
+        <ul>
+          <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
+          <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
+          <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
     </tr>
   </tbody>
 </table>
@@ -777,6 +803,19 @@ All applicable unit tests should normally be run.
         </ul>
       </td>
     </tr>
+    <!-- test_nifti_viewer.py (all tests) -->
+    <tr>
+      <td>test_nifti_viewer.py (all tests)</td>
+      <td>
+        None (small synthetic volumes, no GPU or test data needed)
+      </td>
+      <td>
+        <ul>
+          <li>VTK visualization window (GUIComponents/nifti_viewer.py): affine/RAS geometry, NIfTI loading, colour maps and cutoff, slice navigation in affine and medical modes, layer controls, overlay removal, window/level reset, screenshots, one viewer per trajectory</li>
+          <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 
@@ -808,11 +847,24 @@ Integration testing should cover the major supported component interactions.
     </tr>
   </thead>
   <tbody>
-    <!-- &lt;placeholder_test&gt; -->
+    <!-- test_vtk_visualization.py (all tests) -->
     <tr>
-      <td>&lt;placeholder_test&gt;</td>
-      <td>&lt;placeholder_params&gt;</td>
-      <td>&lt;placeholder_reason&gt;</td>
+      <td>test_vtk_visualization.py (all tests)</td>
+      <td>
+        <b>Trajectories:</b><br>
+        <ul>
+          <li>Single trajectory</li>
+          <li>Two trajectories (combined trajectory file)</li>
+        </ul>
+        Synthetic Step 1/2/3 results, no GPU or test data needed
+      </td>
+      <td>
+        <ul>
+          <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
+          <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
+          <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
     </tr>
   </tbody>
 </table>

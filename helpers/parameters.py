@@ -123,6 +123,7 @@ FEATURES = {
                            and CUSTOM_TX_TEMPLATES_DIR.is_dir()),
     'plantus': ((BABELBRAIN_SRC / 'PlanTUSViewer' / 'RunPlanTUS.py').is_file()
                 and (BABELBRAIN_SRC / 'ExternalBin' / 'PlanTUS' / 'PlanTUS' / 'PlanTUS_wrapper.py').is_file()),
+    'vtk_viewer': (BABELBRAIN_SRC / 'GUIComponents' / 'nifti_viewer.py').is_file(),
 }
 
 

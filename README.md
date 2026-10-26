@@ -167,11 +167,14 @@ BabelBrain/
 │     │    │    │    ├── GPUBinaryClosing/test_BinaryClosing.py
 │     │    │    │    ├── GPUResample/test_Resample.py
 │     │    │    │    └── ...
+│     │    │    ├── GUIComponents/
+│     │    │    │    └── test_nifti_viewer.py
 │     │    │    └── PlanTUSViewer/
 │     │    │         └── test_RunPlanTUS.py
 │     │    └── TranscranialModeling/
 │     │         └── babel_integration/
 │     │              └── test_babel_integration_helpers.py
+│     ├── Integration/              (components working together, e.g. test_vtk_visualization.py)
 │     ├── E2E/
 │     ├── Regression/
 │     └── Generate_Outputs/
@@ -187,7 +190,7 @@ Where new code goes:
 Types of tests:
 
 - **Unit tests** check individual functions or "units" of BabelBrain.
-- **Integration tests** check that multiple components work together. None are implemented yet; they would go in a `Tests/Integration/` folder.
+- **Integration tests** check that multiple components work together, e.g. [test_vtk_visualization.py](Integration/test_vtk_visualization.py) runs BabelBrain's VTK visualization methods against the real viewer. They're in `Tests/Integration/`.
 - **E2E (end-to-end) tests** check that the entire pipeline works.
 - **Regression tests** check BabelBrain outputs stay consistent with previously generated reference outputs.
 - **Generate_Outputs** is a "test" that batch runs and saves BabelBrain outputs to use as references in later regression tests.
