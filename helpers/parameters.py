@@ -248,7 +248,7 @@ BASIC_PARAMS = {
         ('Single', 500),    # simple focused
         ('CTX_500', 500),   # focused annular array
         ('H246', 500),      # flat annular array
-        ('REMOPD', 490),    # flat array 2D
+        ('TheraPhas', 490),    # flat array 2D
         ('H317', 250),      # focused array
         ('DomeTx', 220),    # focused array
     ],
@@ -338,7 +338,7 @@ REGRESSION_CASES = {
 # and multipoint profiles.
 CONFIGURATION_MARKERS = {
     'basic_babelbrain_params': BASIC_PARAMS,
-    'intensive_babelbrain_params': INTENSIVE_PARAMS,
+    'intensive_babelbrain_params': INTENSIVE_SIM_PARAMS,
 }
 
 # Custom transducer template -> built-in transducer it replicates (see custom_tx_templates/)
@@ -346,7 +346,7 @@ CUSTOM_TX_EQUIVALENTS = {
     'simple_focused':        {'transducer': 'Single',  'freq_khz': 500},
     'flat_annular_array':    {'transducer': 'H246',    'freq_khz': 500},
     'focused_annular_array': {'transducer': 'CTX_500', 'freq_khz': 500},
-    'flat_array_2D':         {'transducer': 'REMOPD',  'freq_khz': 490},
+    'flat_array_2D':         {'transducer': 'TheraPhas',  'freq_khz': 490},
     'focused_array':         {'transducer': 'H317',    'freq_khz': 250},
 }
 
@@ -360,13 +360,13 @@ CUSTOM_TX_EQUIVALENTS = {
 MARKER_TRANSDUCERS = {
     'all_targets_babelbrain_params': {
         'include_others': True,
-        'frequencies': {'Single': [500], 'CTX_500': [500], 'H317': [250], 'REMOPD': [490],
+        'frequencies': {'Single': [500], 'CTX_500': [500], 'H317': [250], 'TheraPhas': [490],
                         'CTX_250': [], 'CTX_250_2ch': []},
     },
     'bare_min_babelbrain_params': {
         'include_others': False,
         'frequencies': {'H317': [250], 'Single': [250], 'CTX_250': None, 'H246': None, 'BSonix': None,
-                        'REMOPD': [300]},  # None = all frequencies
+                        'TheraPhas': [300]},  # None = all frequencies
     },
 }
 
