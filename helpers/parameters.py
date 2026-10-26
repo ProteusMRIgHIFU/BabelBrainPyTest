@@ -260,17 +260,43 @@ BASIC_PARAMS = {
     'require_ct_files': True,
 }
 
-# Intensive configuration: a high frequency phased array with CT, multipoint focusing and long
-# sonications. Run as regression_test_full_pipeline_intensive, and selected in the older
-# E2E/generate-outputs tests by the intensive_babelbrain_params marker. Fields as in REGRESSION_CASES.
-INTENSIVE_PARAMS = {
+# Quick configuration: a cheap full pipeline (ernie, MRI only, superficial target, one single
+# element transducer), the base for regression cases that check a single feature. Fields as in
+# REGRESSION_CASES.
+QUICK_SIM_PARAMS = {
+    'dataset': 'ernie',
+    'trajectory_type': 'brainsight',
+    'target': DEFAULT_TARGET,
+    'ct_types': ['NONE'],
+    'transducers': [('Single', 500)],
+    'thermal_profile': DEFAULT_THERMAL_PROFILE,
+    'multipoint_profile': None,
+    'soft_tissue_segmentation': [False],
+    'last_step': 3,
+    'backends': RELEASE_BACKENDS,
+    'require_ct_files': True,
+}
+
+# Multipoint focusing on the quick configuration. MultiPoint profiles only work with phased arrays
+# (transducers with steering), so it uses H317 at its lowest frequency instead of Single.
+# Run as regression_test_full_pipeline_multipoint.
+MULTIPOINT_SIM_PARAMS = {
+    **QUICK_SIM_PARAMS,
+    'transducers': [('H317', 250)],
+    'multipoint_profile': DEFAULT_MULTIPOINT_PROFILE,
+}
+
+# Intensive configuration: a high frequency phased array with CT and long sonications. Run as 
+# regression_test_full_pipeline_intensive, and selected in the older E2E/generate-outputs tests 
+# by the intensive_babelbrain_params marker. Fields as in REGRESSION_CASES.
+INTENSIVE_SIM_PARAMS = {
     'dataset': 'ID_0082',
     'trajectory_type': 'brainsight',
     'target': 'Deep_Target_Left',
     'ct_types': ['CT'],
     'transducers': [('H317', 825)],
     'thermal_profile': INTENSIVE_THERMAL_PROFILE,
-    'multipoint_profile': DEFAULT_MULTIPOINT_PROFILE,
+    'multipoint_profile': None,
     'soft_tissue_segmentation': [False],
     'last_step': 3,
     'backends': RELEASE_BACKENDS,
@@ -290,7 +316,8 @@ INTENSIVE_PARAMS = {
 #                                     (those combinations are skipped instead of required)
 REGRESSION_CASES = {
     'regression_test_full_pipeline': BASIC_PARAMS,
-    'regression_test_full_pipeline_intensive': INTENSIVE_PARAMS,
+    'regression_test_full_pipeline_intensive': INTENSIVE_SIM_PARAMS,
+    'regression_test_full_pipeline_multipoint': MULTIPOINT_SIM_PARAMS,
     'regression_test_GetSkullMaskFromSimbNIBSSTL': {
         'dataset': 'ID_0082',
         'trajectory_type': 'brainsight',

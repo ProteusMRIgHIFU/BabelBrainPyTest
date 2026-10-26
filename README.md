@@ -336,7 +336,7 @@ The `basic_babelbrain_params` marker selects the basic configuration, the standa
 
 It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The major release `regression_test_full_pipeline` (see [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), Table 10) runs this same configuration: its `REGRESSION_CASES` entry is `BASIC_PARAMS`, so changing the configuration there updates both.
 
-The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's multipoint profile (MultiFocus_Profile1) and intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration.
+The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_SIM_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration. Multipoint focusing is tested by `regression_test_full_pipeline_multipoint` instead, on the quick configuration (`QUICK_SIM_PARAMS`: ernie, MRI only, superficial target) with H317 at 250 kHz, since multipoint profiles need a phased array.
 
 ```bash
 pytest -k "test_full_pipeline_normal" -m "intensive_babelbrain_params"
@@ -443,7 +443,7 @@ The regression tests in [Regression](Regression) generate their outputs first (`
 pytest Tests/Regression -m generate_outputs
 ```
 
-The parameters of each regression test (one entry per row of Table 10: dataset, trajectory, target, scan types, transducers, profiles, ...) are in `REGRESSION_CASES` in [parameters.py](helpers/parameters.py); change a row there and the regression cases and the consistency checks follow. `regression_test_full_pipeline` and `regression_test_full_pipeline_intensive` use the basic and intensive configurations, `BASIC_PARAMS` and `INTENSIVE_PARAMS`, so they're edited there and the `basic_babelbrain_params` / `intensive_babelbrain_params` markers follow too. [test_suite_consistency.py](Consistency/test_suite_consistency.py) checks that every dataset, target, scan type, transducer/frequency and input file a case names exists.
+The parameters of each regression test (one entry per row of Table 10: dataset, trajectory, target, scan types, transducers, profiles, ...) are in `REGRESSION_CASES` in [parameters.py](helpers/parameters.py); change a row there and the regression cases and the consistency checks follow. `regression_test_full_pipeline` and `regression_test_full_pipeline_intensive` use the basic and intensive configurations, `BASIC_PARAMS` and `INTENSIVE_SIM_PARAMS`, so they're edited there (and `regression_test_full_pipeline_multipoint` uses `MULTIPOINT_SIM_PARAMS`, built on `QUICK_SIM_PARAMS`) and the `basic_babelbrain_params` / `intensive_babelbrain_params` markers follow too. [test_suite_consistency.py](Consistency/test_suite_consistency.py) checks that every dataset, target, scan type, transducer/frequency and input file a case names exists.
 
 Tests for features an older BabelBrain version doesn't have (remote servers, custom transducers, PlanTUS) are skipped automatically.
 

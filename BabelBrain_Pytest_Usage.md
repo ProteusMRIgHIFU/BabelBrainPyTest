@@ -945,11 +945,7 @@ Regression testing for a major release should provide broader coverage than for 
         </ul>
         <b>Multipoint:</b><br>
         <ul>
-          <li>Yes</li>
-        </ul>
-        <b>Multipoint Profile:</b><br>
-        <ul>
-          <li>MultiFocus_Profile1</li>
+          <li>No</li>
         </ul>
         <b>Thermal Profile:</b><br>
         <ul>
@@ -963,6 +959,49 @@ Regression testing for a major release should provide broader coverage than for 
       <td>
         <ul>
           <li>Tests more intensive sim</li>
+          <li>3 total tests</li>
+        </ul>
+      </td>
+    </tr>
+    <!-- regression_test_full_pipeline_multipoint -->
+    <tr>
+      <td>regression_test_full_pipeline_multipoint</td>
+      <td>
+        <b>Computing backend:</b><br>
+        <ul>
+          <li>CUDA</li>
+          <li>OpenCL</li>
+          <li>Metal</li>
+        </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>ernie</li>
+        </ul>
+        <b>CT Type:</b><br>
+        <ul>
+          <li>NONE</li>
+        </ul>
+        <b>Multipoint:</b><br>
+        <ul>
+          <li>Yes</li>
+        </ul>
+        <b>Multipoint Profile:</b><br>
+        <ul>
+          <li>MultiFocus_Profile1</li>
+        </ul>
+        <b>Thermal Profile:</b><br>
+        <ul>
+          <li>pytest_thermal_profile_1</li>
+        </ul>
+        <b>Transducer/Frequency/Trajectory:</b>
+        <ul>
+          <li>H317/250kHz/Superficial Target (left)</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>Tests multipoint focusing on the quick configuration (QUICK_SIM_PARAMS), so it runs much faster than the intensive sim</li>
+          <li>Multipoint profiles only work with phased arrays (transducers with steering), so it uses H317 at its lowest frequency instead of the quick configuration's single element transducer</li>
           <li>Don't need to test changing steering controls since it is automatically done for the multipoint profile?</li>
           <li>3 total tests</li>
         </ul>

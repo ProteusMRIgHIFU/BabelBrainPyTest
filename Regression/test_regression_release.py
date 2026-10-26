@@ -30,6 +30,7 @@ pytestmark = pytest.mark.major_release
 # ================================================================================================================================
 FULL_PIPELINE_SUITE = 'regression_full_pipeline'
 FULL_PIPELINE_INTENSIVE_SUITE = 'regression_full_pipeline_intensive'
+FULL_PIPELINE_MULTIPOINT_SUITE = 'regression_full_pipeline_multipoint'
 SKULL_MASK_SUITE = 'regression_GetSkullMaskFromSimbNIBSSTL'
 
 
@@ -50,6 +51,7 @@ def regression_cases(name, marks):
 
 FULL_PIPELINE_CASES = regression_cases('regression_test_full_pipeline', [pytest.mark.slow])
 FULL_PIPELINE_INTENSIVE_CASES = regression_cases('regression_test_full_pipeline_intensive', [pytest.mark.slow])
+FULL_PIPELINE_MULTIPOINT_CASES = regression_cases('regression_test_full_pipeline_multipoint', [pytest.mark.slow])
 SKULL_MASK_CASES = regression_cases('regression_test_GetSkullMaskFromSimbNIBSSTL', [pytest.mark.step1])
 
 
@@ -66,6 +68,12 @@ def test_generate_regression_full_pipeline(pipeline, case):
 @pytest.mark.parametrize('case', FULL_PIPELINE_INTENSIVE_CASES)
 def test_generate_regression_full_pipeline_intensive(pipeline, case):
     pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
+
+
+@pytest.mark.generate_outputs
+@pytest.mark.parametrize('case', FULL_PIPELINE_MULTIPOINT_CASES)
+def test_generate_regression_full_pipeline_multipoint(pipeline, case):
+    pipeline.ensure_outputs(FULL_PIPELINE_MULTIPOINT_SUITE, case)
 
 
 @pytest.mark.generate_outputs
@@ -88,6 +96,13 @@ def test_regression_full_pipeline(pipeline, tolerance, case):
 def test_regression_full_pipeline_intensive(pipeline, tolerance, case):
     ref_dir = find_reference_dir(FULL_PIPELINE_INTENSIVE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
+    pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
+
+
+@pytest.mark.parametrize('case', FULL_PIPELINE_MULTIPOINT_CASES)
+def test_regression_full_pipeline_multipoint(pipeline, tolerance, case):
+    ref_dir = find_reference_dir(FULL_PIPELINE_MULTIPOINT_SUITE, case)
+    test_dir = pipeline.ensure_outputs(FULL_PIPELINE_MULTIPOINT_SUITE, case)
     pipeline.assert_thermal_outputs_match(ref_dir, test_dir, tolerance)
 
 
