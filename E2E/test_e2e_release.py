@@ -45,7 +45,7 @@ REMOTE_CASES = [
     for tx, freq in [('Single', 500), ('H317', 250)]
 ]
 
-# Slicer targets for every pair so REMOPD isn't flipped and compares 1 to 1 with its custom version
+# Slicer targets for every pair so TheraPhas isn't flipped and compares 1 to 1 with its custom version
 CUSTOM_TX_CASES = [
     case_param(PipelineCase(dataset='ernie', trajectory_type='slicer', backend=backend,
                             custom_tx_template=template, **equivalent),

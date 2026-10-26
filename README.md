@@ -331,7 +331,7 @@ The `basic_babelbrain_params` marker selects the basic configuration, the standa
 - Dataset: ernie
 - CT scan file: NONE
 - Trajectory type / target: brainsight / Superficial_Target_Left
-- Transducer / frequency: Single 500 kHz, CTX_500 500 kHz, H246 500 kHz, REMOPD 490 kHz, H317 250 kHz, DomeTx 220 kHz (one per transducer geometry type)
+- Transducer / frequency: Single 500 kHz, CTX_500 500 kHz, H246 500 kHz, TheraPhas 490 kHz, H317 250 kHz, DomeTx 220 kHz (one per transducer geometry type)
 - Computing backend: CUDA, OpenCL, Metal (backends not available on your system are skipped)
 
 It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The major release `regression_test_full_pipeline` (see [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), Table 10) runs this same configuration: its `REGRESSION_CASES` entry is `BASIC_PARAMS`, so changing the configuration there updates both.

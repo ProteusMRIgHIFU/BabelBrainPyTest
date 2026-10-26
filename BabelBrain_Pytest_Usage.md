@@ -167,7 +167,7 @@ List the parameters that can be varied during testing.
           <li>Simple Focused → Single 500 kHz</li>
           <li>Flat Annular Array → H246</li>
           <li>Focused Annular Array → CTX-500</li>
-          <li>Flat Array 2D → REMOPD (when using a Slicer target, REMOPD flipping doesn't happen, therefore a 1 to 1 comparison can be done)</li>
+          <li>Flat Array 2D → TheraPhas (when using a Slicer target, TheraPhas flipping doesn't happen, therefore a 1 to 1 comparison can be done)</li>
           <li>Focused Array → H317</li>
         </ul>
       </td>
@@ -317,7 +317,7 @@ List the parameters that can be varied during testing.
           <li>H317</li>
           <li>H246</li>
           <li>BSonix</li>
-          <li>REMOPD</li>
+          <li>TheraPhas</li>
           <li>I12378</li>
           <li>ATAC</li>
           <li>R15148</li>
@@ -912,7 +912,7 @@ Regression testing for a major release should provide broader coverage than for 
           <li>Single (simple focused type)/500kHz/Superficial</li>
           <li>CTX_500 (focused annular array)/500kHz/Superficial</li>
           <li>H246 (flat annular array)/500kHz/Superficial</li>
-          <li>REMOPD (flat array 2D)/490kHz/Superficial</li>
+          <li>TheraPhas (flat array 2D)/490kHz/Superficial</li>
           <li>H317 (focused array)/250kHz/Superficial</li>
           <li>DomeTx (focused array)/220kHz/Superficial</li>
         </ul>
