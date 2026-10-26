@@ -268,7 +268,7 @@ QUICK_SIM_PARAMS = {
     'trajectory_type': 'brainsight',
     'target': DEFAULT_TARGET,
     'ct_types': ['NONE'],
-    'transducers': [('Single', 500)],
+    'transducers': [('CTX_500', 500)],
     'thermal_profile': DEFAULT_THERMAL_PROFILE,
     'multipoint_profile': None,
     'soft_tissue_segmentation': [False],
