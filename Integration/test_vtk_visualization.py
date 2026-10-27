@@ -14,6 +14,8 @@ synthetic Step 1/2/3 results the way the GUI does when each step finishes:
 Only the parts unrelated to the viewer (Step 1 plots, the Step 2 tab, the clock dialog) are stubbed,
 so no GPU or test data is needed.
 """
+import functools
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -37,6 +39,15 @@ VTK_METHODS = [
     'UpdateNiftiMergedThermalResults', '_UpdateVTKMergedThermalResults',
     '_closingVtkVisualization',
 ]
+# What each BabelBrain entry point stands for, logged when a test calls it
+LOGGED_METHODS = {
+    'UpdateMask': 'Step 1 finished a trajectory',
+    'OpenVTKVisualization': '"VTK visualization" clicked',
+    'UpdateNiftiAcResults': 'Step 2 results',
+    'UpdateNiftiTemperatureResults': 'Step 3 results',
+    'UpdateNiftiMergedAcResults': 'Step 2 Combine Trajectories results',
+    'UpdateNiftiMergedThermalResults': 'Step 3 Combine Trajectories results',
+}
 
 
 # ================================================================================================================================
@@ -66,6 +77,23 @@ def _field(peak):
 def _layers(viewer):
     """Result ids shown by a trajectory viewer (the base tissue mask has none)."""
     return [row._id for row in viewer._layer_panel._rows]
+
+
+def _logged(name, method):
+    """BabelBrain `method` that logs the call and then the layers of every open trajectory viewer."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        trajectory = args[-1] if name in ('UpdateNiftiAcResults', 'UpdateNiftiTemperatureResults') \
+            else self._TrajectoryNumber if name == 'UpdateMask' else None
+        logging.info(f"BabelBrain.{name}: {LOGGED_METHODS[name]}"
+                     f"{f' (trajectory {trajectory})' if trajectory is not None else ''}")
+        result = method(self, *args, **kwargs)
+        if self.viewer_open:
+            for n, viewer in enumerate(self._vtk_visualization.viewer):
+                layers = ['base' if i == '' else i for i in _layers(viewer)]
+                logging.info(f"  viewer {n} layers: {layers}, slices {[vp._slider.value() for vp in viewer._vps]}")
+        return result
+    return wrapper
 
 
 def _visible(viewer, layer_id):
@@ -106,6 +134,7 @@ class _Harness:
     def run_step1(self, targets):
         """Step 1: GenerateMask resets the results, then each trajectory's mask is saved and
         UpdateMask runs when it finishes."""
+        logging.info(f"Step 1 on {len(targets)} trajectory(ies), focal point voxels {targets}")
         self._reset_results(len(targets))
         for n, target in enumerate(targets):
             nibabel.save(_mask(target), self._outnameMask[n])
@@ -129,7 +158,8 @@ def harness_factory(qtbot, tmp_path):
     from BabelBrain.BabelBrain import BabelBrain
 
     for name in VTK_METHODS:
-        setattr(_Harness, name, getattr(BabelBrain, name))
+        method = getattr(BabelBrain, name)
+        setattr(_Harness, name, _logged(name, method) if name in LOGGED_METHODS else method)
     created = []
 
     def _make(ids=('traj',)):
