@@ -278,6 +278,20 @@ def test_navigate_to_ras_round_trip(viewer, mode):
     np.testing.assert_allclose(viewer.get_current_ras(), point, atol=1e-6)
 
 
+@pytest.mark.parametrize('mode', ['affine', 'medical'])
+def test_navigate_to_ras_round_trip_flipped_odd_volume(qtbot, nv, mode):
+    """Same on a flipped (LAS) volume with odd dimensions, where the grid middle is a voxel centre."""
+    shape, affine = (21, 27, 33), _affine(spacing=(1.0, 1.0, 1.0), flip_x=True)
+    widget = nv.NiftiViewer()
+    qtbot.addWidget(widget)
+    widget.load_base(nibabel.Nifti1Image(np.ones(shape, np.float32), affine), np.array([10, 13, 16]))
+    widget.set_mode(mode)
+    for ijk in [(0, 0, 0), (3, 20, 9), (20, 26, 32)]:
+        point = (affine @ np.array([*ijk, 1.]))[:3]
+        widget.navigate_to_ras(*point)
+        np.testing.assert_allclose(widget.get_current_ras(), point, atol=1e-6)
+
+
 def test_navigate_to_ras_clips_outside_points(viewer):
     viewer.navigate_to_ras(1e4, -1e4, 1e4)
     assert [vp.current_slice() for vp in viewer._vps] == [0, SHAPE[0] - 1, SHAPE[2] - 1]
