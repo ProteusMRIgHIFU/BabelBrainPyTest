@@ -5,6 +5,7 @@ import pytest
 from skimage.measure import label
 
 from BabelBrain.GPUFunctions.GPULabel import LabelImage
+from Tests.helpers.logs import describe_array, log_duration
 
 @pytest.mark.step1
 def test_LabelImage_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu_device,load_files,get_resampled_input,cached_cpu_truth,gpu_vs_cpu_plot,compare_data,request):
@@ -35,8 +36,10 @@ def test_LabelImage_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_g
     bone_mask = resampled_data > HUThreshold
 
     # Run label step
-    logging.info('Running label step via GPU')
-    data_label_gpu = LabelImage.LabelImage(bone_mask, GPUBackend=computing_backend['type'])
+    describe_array('Bone mask', bone_mask)
+    with log_duration(f"GPU labelling ({computing_backend['type']})"):
+        data_label_gpu = LabelImage.LabelImage(bone_mask, GPUBackend=computing_backend['type'])
+    describe_array('GPU output', data_label_gpu)
     data_label_cpu = cached_cpu_truth(output_fnames['Output_Truth'],lambda: label(bone_mask),affine=resampled_nifti.affine)
 
     # Save plot screenshot to be added to html report later

@@ -26,6 +26,7 @@ The multipoint and combined trajectories runs are saved in <gen_output_folder>/<
 and reused by later sessions on the same BabelBrain commit (see pipeline_helpers.ensure_case_outputs).
 """
 import glob
+import logging
 import os
 import signal
 import socket
@@ -95,6 +96,7 @@ def remote_server(tmp_path_factory):
         server = {'name': remote.get('name', REMOTE_SERVER_NAME), 'host': remote['host'],
                   'port': remote.getint('port', 8760), 'token': remote.get('token') or None,
                   'https': remote.getboolean('https', False)}
+        logging.info(f"Using remote server '{server['name']}' at {server['host']}:{server['port']} from config.ini")
     else:
         server = {'name': REMOTE_SERVER_NAME, 'host': '127.0.0.1', 'port': _free_port(), 'token': None}
         log_path = servers_dir / 'server.log'
@@ -102,6 +104,8 @@ def remote_server(tmp_path_factory):
         process = subprocess.Popen([sys.executable, os.path.join('BabelBrain', 'BabelBrain.py'), '--serve', '--headless',
                                     '--serve-host', server['host'], '--serve-port', str(server['port'])],
                                    cwd=BABELBRAIN_ROOT, stdout=log_file, stderr=subprocess.STDOUT)
+        logging.info(f"Started a local headless BabelBrain server on {server['host']}:{server['port']} "
+                     f"(log: {log_path})")
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(RemoteServers, 'CONFIG_DIR', str(servers_dir))
@@ -121,6 +125,7 @@ def remote_server(tmp_path_factory):
             details = f" Server log: {servers_dir / 'server.log'}" if process is not None else ""
             pytest.fail(f"Remote server {server['host']}:{server['port']} not reachable: {info}.{details}")
 
+        logging.info(f"Remote server {server['host']}:{server['port']} is reachable: {info}")
         yield server
 
     _stop_server(process, log_file)
@@ -128,6 +133,7 @@ def remote_server(tmp_path_factory):
 
 def _stop_server(process, log_file):
     if process is not None and process.poll() is None:
+        logging.info("Stopping the local BabelBrain server")
         process.send_signal(signal.SIGINT)
         try:
             process.wait(timeout=60)
@@ -175,6 +181,8 @@ def _create_custom_tx(pipeline, custom_tx_root, case):
     pipeline.auto_answer_dialogs()
     with open(BABELBRAIN_ROOT / 'BabelBrain' / 'version-gui.txt') as f:
         bb_version = f.readline().strip()
+    logging.info(f"Creating custom transducer {tx_name} from template {case.custom_tx_template} "
+                 f"on {case.backend} ({devices[0]})")
     tx = CustomTransducer(bb_version=bb_version, transducer_yaml=str(config_file),
                           gpu=devices[0], computing_backend=case.backend)
     custom_tx_root['created'][key] = get_class_name(tx.name)
@@ -203,13 +211,17 @@ def test_e2e_remote_full_pipeline(pipeline, remote_server, case):
     bb = pipeline.run(case, output_dir, remote_server_name=remote_server['name'])
 
     assert bb.Config['ComputingBackend'] == 5, "Remote server was not selected as the computing engine"
-    assert thermal_outputs(output_dir), "Remote run finished but no thermal outputs were returned"
+    outputs = thermal_outputs(output_dir)
+    logging.info(f"Remote run returned {len(outputs)} thermal output(s) to {output_dir}")
+    assert outputs, "Remote run finished but no thermal outputs were returned"
 
 
 def _custom_tx_case_outputs(pipeline, custom_tx_root, case):
     """Saved outputs of the built-in transducer and of its custom replica (the custom transducer
     is only created when its outputs have to be generated)."""
+    logging.info(f"Outputs of built-in transducer {case.transducer} at {case.freq_khz} kHz")
     builtin_dir = pipeline.ensure_outputs(CUSTOM_TX_SUITE, replace(case, custom_tx_template=None))
+    logging.info(f"Outputs of its custom replica (template {case.custom_tx_template})")
     custom_name = None
     if not saved_outputs_reusable(CUSTOM_TX_SUITE, case):
         custom_name = _create_custom_tx(pipeline, custom_tx_root, case)
@@ -238,7 +250,9 @@ def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
 @pytest.mark.parametrize('case', MULTIPOINT_CASES)
 def test_e2e_multipoint_full_pipeline(pipeline, case):
     output_dir = pipeline.ensure_outputs(MULTIPOINT_SUITE, case)
-    assert thermal_outputs(output_dir), f"Multipoint run finished but no thermal outputs were saved in {output_dir}"
+    outputs = thermal_outputs(output_dir)
+    logging.info(f"Multipoint run ({case.multipoint_profile}) has {len(outputs)} thermal output(s) in {output_dir}")
+    assert outputs, f"Multipoint run finished but no thermal outputs were saved in {output_dir}"
 
 
 @pytest.mark.parametrize('case', COMBINED_TRAJECTORIES_CASES)
@@ -252,6 +266,8 @@ def test_e2e_combined_trajectories_full_pipeline(pipeline, case):
     outputs = thermal_outputs(output_dir)
     merged_thermal = [f for f in outputs if 'Merged_DataForSim-ThermalField' in os.path.basename(f)]
     trajectory_thermal = [f for f in outputs if f not in merged_thermal]
+    logging.info(f"Combined trajectory outputs in {output_dir}: {len(merged_acoustic)} merged acoustic field(s), "
+                 f"{len(merged_thermal)} merged thermal output(s), {len(trajectory_thermal)} per trajectory thermal output(s)")
     assert merged_thermal, f"No combined thermal output (Merged_DataForSim-ThermalField*.h5) in {output_dir}"
     assert len(trajectory_thermal) >= 2, \
         f"Expected a thermal output for each of the two trajectories in {output_dir}, found {trajectory_thermal}"

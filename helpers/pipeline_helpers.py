@@ -34,6 +34,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -68,6 +69,15 @@ _SESSION_GENERATION_FAILURES = {}
 
 class PipelineError(RuntimeError):
     pass
+
+
+STEP_NAMES = {1: 'Step 1 (domain generation)', 2: 'Step 2 (acoustic simulation)', 3: 'Step 3 (thermal simulation)'}
+
+
+def _elapsed(start):
+    """Time since `start` (time.monotonic()) as a short human readable string."""
+    seconds = time.monotonic() - start
+    return f"{seconds:.1f} s" if seconds < 120 else f"{seconds / 60:.1f} min"
 
 
 # ================================================================================================================================
@@ -278,6 +288,15 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
     thermal_profile = thermal_profile_path(case)
     output_folder = str(output_folder)
     os.makedirs(output_folder, exist_ok=True)
+    logging.info(f"Setting up BabelBrain for {case.case_id}:\n"
+                 f"  dataset      {case.dataset} (T1W {ds['T1_path']}, SimNIBS {ds['m2m_folder_path']})\n"
+                 f"  trajectory   {case.trajectory_type} {case.target} ({trajectory_file})\n"
+                 f"  scan type    {case.ct_type}{f' ({ct_file})' if ct_file else ''}\n"
+                 f"  transducer   {custom_tx_name or case.transducer} at {case.freq_khz} kHz, {case.ppw} PPW\n"
+                 f"  backend      {f'remote server {remote_server_name}' if remote_server_name else case.backend}\n"
+                 f"  profiles     thermal {thermal_profile.name}"
+                 f"{f', multipoint {case.multipoint_profile}' if case.multipoint_profile else ''}\n"
+                 f"  output       {output_folder}")
 
     # Input selection
     sf = SelFiles()
@@ -314,6 +333,7 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
     except ImportError:
         logging.warning("ApplyAdvancedConfig not available in this BabelBrain version, using saved advanced options")
     if case.segment_soft_tissue:
+        logging.info("Enabling Step 1 soft tissue segmentation")
         bb.Config['bSegmentBrainTissue'] = True
         bb.Config['SimbNINBSRoot'] = simnibs_root()
 
@@ -328,6 +348,8 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
     bb.Widget.USPPWSpinBox.setProperty('UserData', case.ppw)
     if case.ct_type != 'NONE':
         bb.Widget.HUThresholdSpinBox.setValue(300)
+    logging.info(f"BabelBrain ready: computing engine '{sf.ui.ComputingEnginecomboBox.currentText()}', "
+                 f"{trajectory_count(bb)} trajectory(ies) {bb.Config['ID']}")
 
     return bb
 
@@ -335,6 +357,7 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
 def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False):
     """Copy the inputs BabelBrain writes next to into the output folder, so the test data
     folder is never modified and every generated file lands in the case folder."""
+    logging.info(f"Copying inputs into {output_folder} so the test data folder isn't modified")
     shutil.copy(bb.Config['T1W'], os.path.join(output_folder, os.path.basename(bb.Config['T1W'])))
     if ct_file is not None:
         shutil.copy(ct_file, os.path.join(output_folder, os.path.basename(ct_file)))
@@ -382,11 +405,15 @@ def _step_finished(bb, step):
     return True
 
 
-def _wait_for_step(qtbot, bb, step, screenshots, image_to_base64):
+def _wait_for_step(qtbot, bb, step, screenshots, image_to_base64, label=None):
+    """Wait for `step` to finish (logging its duration), then screenshot the GUI and check for errors."""
+    label = label or STEP_NAMES[step]
+    start = time.monotonic()
     try:
         qtbot.waitUntil(lambda: _step_finished(bb, step), timeout=STEP_TIMEOUTS_MS[step])
     except qtbot.TimeoutError as error:
         raise PipelineError(f"Step {step} did not finish within {STEP_TIMEOUTS_MS[step] / 60000:.0f} min") from error
+    logging.info(f"{label} finished in {_elapsed(start)}")
     qtbot.wait(1000)  # Wait for plots to display
     if screenshots is not None and image_to_base64 is not None:
         screenshots.append(image_to_base64(qtbot.screenshot(bb)))
@@ -438,8 +465,9 @@ def _combine_trajectories(qtbot, bb, step_widget, step, screenshots, image_to_ba
     button = getattr(step_widget.Widget, 'CombineTrajectories', None)
     if button is None or not button.isEnabled():
         raise PipelineError(f"Combine Trajectories is not available in step {step} after running every trajectory")
+    logging.info(f"Step {step}: Combine Trajectories")
     button.click()
-    _wait_for_step(qtbot, bb, step, screenshots, image_to_base64)
+    _wait_for_step(qtbot, bb, step, screenshots, image_to_base64, label=f"Step {step} Combine Trajectories")
 
 
 def run_pipeline(qtbot, bb, last_step=3, screenshots=None, image_to_base64=None, export_maps=True):
@@ -449,37 +477,48 @@ def run_pipeline(qtbot, bb, last_step=3, screenshots=None, image_to_base64=None,
     With a combined trajectory file (several targets), steps 2 and 3 run on every trajectory tab
     and then merge them with Combine Trajectories; the exports are then of the Merged tab."""
     n_trajectories = trajectory_count(bb)
+    pipeline_start = time.monotonic()
     bb.testing_error = False
+    logging.info(f"Running steps 1 to {last_step} on {n_trajectories} trajectory(ies)")
+    logging.info(f"{STEP_NAMES[1]}: started")
     bb.Widget.CalculatePlanningMask.click()
     _wait_for_step(qtbot, bb, 1, screenshots, image_to_base64)
     if last_step == 1:
+        logging.info(f"Pipeline finished after step 1 in {_elapsed(pipeline_start)}")
         return
 
     bb.Widget.tabWidget.setCurrentIndex(1)
     for index in range(n_trajectories):
+        label = f"{STEP_NAMES[2]}, trajectory {index + 1}/{n_trajectories}"
         _select_trajectory_tab(bb.AcSim, index)
         _set_cone_distance(bb)
+        logging.info(f"{label}: started")
         bb.AcSim.Widget.CalculateAcField.click()
-        _wait_for_step(qtbot, bb, 2, screenshots, image_to_base64)
+        _wait_for_step(qtbot, bb, 2, screenshots, image_to_base64, label=label)
     if n_trajectories > 1:
         _combine_trajectories(qtbot, bb, bb.AcSim, 2, screenshots, image_to_base64)
     if last_step == 2:
+        logging.info(f"Pipeline finished after step 2 in {_elapsed(pipeline_start)}")
         return
 
     bb.Widget.tabWidget.setCurrentIndex(2)
     for index in range(n_trajectories):
+        label = f"{STEP_NAMES[3]}, trajectory {index + 1}/{n_trajectories}"
         _select_trajectory_tab(bb.ThermalSim, index)
+        logging.info(f"{label}: started")
         bb.ThermalSim.Widget.CalculateThermal.click()
-        _wait_for_step(qtbot, bb, 3, screenshots, image_to_base64)
+        _wait_for_step(qtbot, bb, 3, screenshots, image_to_base64, label=label)
     if n_trajectories > 1:
         _combine_trajectories(qtbot, bb, bb.ThermalSim, 3, screenshots, image_to_base64)
 
+    logging.info(f"Exporting Step 3 summary{' and maps' if export_maps else ''}")
     with qtbot.captureExceptions() as exceptions:
         bb.ThermalSim.Widget.ExportSummary.click()
         if export_maps:
             bb.ThermalSim.Widget.ExportMaps.click()
     if exceptions:
         raise PipelineError(f"Error exporting results: {exceptions}")
+    logging.info(f"Pipeline finished in {_elapsed(pipeline_start)}")
 
 
 def thermal_outputs(folder):
@@ -514,7 +553,11 @@ def saved_outputs_reusable(suite, case):
     """True when complete outputs for `case` from the current BabelBrain commit and the current
     trajectory/profile files are saved."""
     marker = read_marker(case_output_dir(suite, case))
-    if marker is None or os.environ.get(REGENERATE_ENV) == '1':
+    if marker is None:
+        logging.info(f"No complete saved outputs for {case.case_id}, they will be generated")
+        return False
+    if os.environ.get(REGENERATE_ENV) == '1':
+        logging.info(f"{REGENERATE_ENV}=1, saved outputs for {case.case_id} will be regenerated")
         return False
     if marker.get('babelbrain_commit') != babelbrain_commit():
         logging.info(f"Saved outputs for {case.case_id} were generated by BabelBrain commit "
@@ -550,7 +593,9 @@ def ensure_case_outputs(qtbot, monkeypatch, suite, case, screenshots=None, image
     # The case folder only holds copied inputs and outputs, so a rerun starts from an empty one
     # (otherwise BabelBrain's own cache would reload half-written or outdated step results)
     if out_dir.exists():
+        logging.info(f"Deleting incomplete or outdated outputs in {out_dir}")
         shutil.rmtree(out_dir)
+    logging.info(f"Generating outputs for {case.case_id} (suite {suite}, BabelBrain commit {commit})")
 
     auto_answer_dialogs(monkeypatch)
     started = datetime.datetime.now()
@@ -562,6 +607,7 @@ def ensure_case_outputs(qtbot, monkeypatch, suite, case, screenshots=None, image
             raise PipelineError(f"Pipeline finished but no thermal output was saved in {out_dir}")
     except Exception as error:  # pytest skip/fail outcomes are BaseExceptions and pass through
         _SESSION_GENERATION_FAILURES[case.case_id] = f"{type(error).__name__}: {error}"
+        logging.error(f"Generating outputs for {case.case_id} failed: {type(error).__name__}: {error}")
         pytest.fail(f"Failed to generate outputs for {case.case_id}: {type(error).__name__}: {error}")
 
     with open(out_dir / PYTEST_MARKER, 'w') as f:
@@ -573,6 +619,7 @@ def ensure_case_outputs(qtbot, monkeypatch, suite, case, screenshots=None, image
                         'python': sys.version.split()[0],
                         'started': started.isoformat(timespec='seconds'),
                         'finished': datetime.datetime.now().isoformat(timespec='seconds')}, f, sort_keys=False)
+    logging.info(f"Saved {len(thermal_outputs(out_dir))} thermal output(s) for {case.case_id} in {out_dir}")
     return out_dir
 
 
@@ -581,6 +628,7 @@ def find_reference_dir(suite, case):
     suite_dir = Path(ref_output_dir) / suite
     exact = suite_dir / case.case_id
     if exact.is_dir():
+        logging.info(f"Reference outputs: {exact}")
         return exact
     for backend in RELEASE_BACKENDS + ['MLX']:
         if backend == case.backend:
@@ -614,10 +662,16 @@ def compare_thermal_outputs(ref_folder, test_folder, tolerance, screenshots, com
     problems += [f"Missing in test outputs: {k}" for k in sorted(set(ref_files) - set(test_files))]
     problems += [f"Missing in reference outputs: {k}" for k in sorted(set(test_files) - set(ref_files))]
 
+    logging.info(f"Comparing thermal outputs (tolerance {tolerance}{f', ignoring {list(ignore)}' if ignore else ''}):\n"
+                 f"  reference {ref_folder} ({len(ref_files)} file(s))\n"
+                 f"  test      {test_folder} ({len(test_files)} file(s))")
     matches = []
     for key in sorted(set(ref_files) & set(test_files)):
         matches.append(compare_data['h5_data'](ref_files[key], test_files[key], screenshots,
                                                tolerance=tolerance, label=key, ignore=ignore))
+        logging.info(f"  {'match' if matches[-1] else 'DIFFERS'}: {key}")
+    for problem in problems:
+        logging.warning(problem)
     return (all(matches) and not problems), problems
 
 
@@ -675,15 +729,20 @@ def compare_all_outputs(ref_folder, test_folder, tolerance, screenshots, compare
         logging.warning(f"Output not present in reference, not compared: {f}")
     if not ref_files:
         problems.append(f"No outputs in reference folder {ref_folder}")
+    logging.info(f"Comparing all outputs (tolerance {tolerance}):\n"
+                 f"  reference {ref_folder} ({len(ref_files)} file(s))\n"
+                 f"  test      {test_folder} ({len(test_files)} file(s))")
 
     rows = []
     for rel in sorted(ref_files & test_files):
-        logging.info(f"Comparing {rel}")
         ok, detail = _compare_file(os.path.join(str(ref_folder), rel), os.path.join(str(test_folder), rel),
                                    tolerance, screenshots, compare_data)
         rows.append((rel, ok, detail))
+        logging.info(f"  {'match' if ok else 'DIFFERS'}: {rel} ({detail})")
         if not ok:
             problems.append(f"{rel}: {detail}")
+    logging.info(f"{sum(ok for _, ok, _ in rows)}/{len(rows)} output(s) match"
+                 f"{f', {len(ref_files - test_files)} missing from the test outputs' if ref_files - test_files else ''}")
 
     table = ''.join(f"<tr style='background-color:{'#c6f6c6' if ok else '#f6c6c6'}'><td>{rel}</td><td>{detail}</td></tr>"
                     for rel, ok, detail in rows)

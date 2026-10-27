@@ -1,3 +1,5 @@
+import logging
+
 import nibabel
 import numpy as np
 import pytest
@@ -13,10 +15,12 @@ def test_save_T1W_iso(dataset,load_files,check_data,get_mpl_plot,compare_data,tm
 
     # Run save_T1W_iso function
     output_fname = str(tmp_path / 'T1W-isotropic.nii.gz')
+    logging.info(f"Input T1W: shape {input_data['T1W'].shape}, voxel size {input_data['T1W'].header.get_zooms()[:3]}")
     BabelBrain.save_T1W_iso(input_files['T1W'], output_fname)
 
     # Load output
     T1W_iso = nibabel.load(output_fname)
+    logging.info(f"Output: shape {T1W_iso.shape}, voxel size {T1W_iso.header.get_zooms()[:3]}")
 
     # Check that data is isometric
     isometric = check_data['isometric'](T1W_iso)

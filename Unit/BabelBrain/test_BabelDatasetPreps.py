@@ -24,6 +24,7 @@ itself computes. Tests of non-overlapping inputs always run: an empty result is 
 either engine.
 """
 import logging
+from Tests.helpers.logs import log_duration
 import os
 import re
 import subprocess
@@ -147,7 +148,11 @@ def run_do_intersect(request, plots, mesh1, mesh2, use_blender, names=('Mesh 1',
         if problem:
             computed = "no" if view[0].is_empty else f"a {abs(view[0].volume):.6g} mm^3"
             pytest.fail(f"{problem}. Blender itself computes {computed} intersection for these inputs (see report)")
-    result = bdp.DoIntersect(mesh1.copy(), mesh2.copy(), bForceUseBlender=use_blender)
+    _log_meshes(names, mesh1, mesh2, use_blender)
+    with log_duration('DoIntersect'):
+        result = bdp.DoIntersect(mesh1.copy(), mesh2.copy(), bForceUseBlender=use_blender)
+    logging.info(f"Intersection: {len(result.vertices)} vertices, volume {abs(result.volume):.6g} mm^3, "
+                 f"watertight {result.is_watertight}")
     show_intersection(request, plots, mesh1, mesh2, result, names, blender_view=view)
     return result
 
@@ -157,8 +162,18 @@ def expect_outside_headspace(request, plots, mesh1, mesh2, use_blender, names=('
     any engine, so this doesn't depend on trimesh's Blender booleans working)."""
     view = _blender_view(request, mesh1, mesh2, save_scene) if use_blender else None
     show_intersection(request, plots, mesh1, mesh2, names=names, blender_view=view)
+    _log_meshes(names, mesh1, mesh2, use_blender)
+    logging.info("Expecting DoIntersect to raise 'Trajectory is outside headspace'")
     with pytest.raises(ValueError, match="Trajectory is outside headspace"):
         bdp.DoIntersect(mesh1.copy(), mesh2.copy(), bForceUseBlender=use_blender)
+
+
+def _log_meshes(names, mesh1, mesh2, use_blender):
+    logging.info(f"Intersecting {names[0]} and {names[1]} with {'Blender' if use_blender else 'the default engine'}")
+    for name, mesh in zip(names, (mesh1, mesh2)):
+        logging.info(f"  {name}: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces, "
+                     f"volume {abs(mesh.volume):.6g} mm^3, watertight {mesh.is_watertight}, "
+                     f"{len(mesh.split(only_watertight=False))} body(ies)")
 
 
 def assert_valid_intersection(result, mesh1, mesh2):

@@ -6,6 +6,7 @@ import pytest
 from scipy import ndimage
 
 from BabelBrain.GPUFunctions.GPUBinaryClosing import BinaryClosing
+from Tests.helpers.logs import describe_array, log_duration
 
 def binary_closing_box(mask,size):
     """scipy binary_closing with a box structuring element of `size`, done as one 1D dilation and
@@ -53,8 +54,10 @@ def test_BinaryClosing_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     logging.info(f"Binary Closing Filter Size: {filter_size}")
 
     # Run binary closing step
-    logging.info('Running binary closing step via GPU')
-    data_binary_closing_gpu = BinaryClosing.BinaryClose(bone_mask, structure=np.ones(filter_size,dtype=int), GPUBackend=computing_backend['type'])
+    describe_array('Bone mask', bone_mask)
+    with log_duration(f"GPU binary closing ({computing_backend['type']})"):
+        data_binary_closing_gpu = BinaryClosing.BinaryClose(bone_mask, structure=np.ones(filter_size,dtype=int), GPUBackend=computing_backend['type'])
+    describe_array('GPU output', data_binary_closing_gpu)
     data_binary_closing_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                                lambda: binary_closing_box(bone_mask,filter_size),
                                                affine=resampled_nifti.affine)

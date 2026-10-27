@@ -243,6 +243,16 @@ For a conda environment the pytest path looks like `<user>/miniconda3/envs/<env>
 
 Every test's html report entry shows its plots through the same viewer ([report_viewers.py](helpers/report_viewers.py)): drag the slider (slice position, camera position, ...) or press Play to step through. All panels of a viewer stay on the same frame, and nothing plays until you press Play. Screenshots of the GUI (e.g. after each step of the full pipeline tests) are shown as plain images.
 
+## Logs
+
+Tests log what they're doing at INFO level. The messages are shown live in the terminal (`log_cli` in [pytest.ini](pytest.ini)), saved in `PyTest_Reports/pytest.log`, and added to a failing test's report entry. Every test starts with a `START <test id>` line listing its parameters, and ends with its outcome and duration. In between:
+
+- **Pipeline tests** (E2E, regression, generate outputs): the inputs of the run (dataset, trajectory, scan type, transducer, backend, profiles, output folder), whether saved outputs are reused or regenerated and why, each step (and trajectory, and Combine Trajectories) starting and finishing with its duration, and for comparisons the reference used and a match/DIFFERS line per file plus a summary.
+- **GPU unit tests**: the input, the GPU call's duration and output, whether the CPU truth was reloaded or computed (and how long it took), and the comparison metric.
+- **Other tests**: their main inputs and results (e.g. mesh sizes and the intersection volume for DoIntersect, PlanTUS's own output as it runs, the layers of every viewer after each BabelBrain call in the VTK visualization integration tests).
+
+To see less, raise the level for one run (`pytest -o log_cli_level=WARNING ...`), or comment out `log_cli = true` to only keep the log file.
+
 # Unit tests
 
 Run a unit test by its name. For example, after changing `generate_hash` in FileManager.py,

@@ -52,12 +52,12 @@ def bhattacharyya_coefficient(arr1,arr2,num_bins=None):
     # values and helps prevent errors when values lie exactly at bin edge
     min_val = int(np.floor(min(arr1.min(),arr2.min()))) - 0.5
     max_val = int(np.ceil(max(arr1.max(),arr2.max()))) + 0.5
-    logging.debug(f"Using {min_val} to {max_val} range for bhatt coeff calculation")
+    logging.info(f"Using {min_val} to {max_val} range for bhatt coeff calculation")
 
     # Determine number of bins if argument is not supplied
     if num_bins is None:
         num_bins = int(max_val - min_val)
-    logging.debug(f"Using {num_bins} bins for bhatt coeff calculation")
+    logging.info(f"Using {num_bins} bins for bhatt coeff calculation")
 
     # Get and normalize histograms
     hist1,_ = np.histogram(arr1,bins=num_bins,range=(min_val,max_val))
@@ -154,6 +154,8 @@ def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None,ign
     array_results = []
 
     section_title = label if label else os.path.basename(os.path.dirname(h5_ref_path))
+    logging.info(f"Comparing h5 file {section_title} (tolerance {tolerance}):\n"
+                 f"  reference {h5_ref_path}\n  test      {h5_test_path}")
     node_screenshots.append({
         'kind': 'html',
         'html': (
@@ -348,8 +350,12 @@ def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None,ign
         )
         node_screenshots.append({'kind': 'html', 'html': table_html})
 
+    n_compared = len(scalar_results) + len(array_results)
     if len(mismatches) == 0:
+        logging.info(f"All {n_compared} dataset(s) of {section_title} match")
         node_screenshots.append({'kind': 'html', 'html': "<div style='color:green'>All datasets match within tolerance</div>"})
+    else:
+        logging.warning(f"{len(mismatches)} of {n_compared} dataset(s) of {section_title} differ: {', '.join(mismatches)}")
 
     return len(mismatches) == 0
 

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from BabelBrain.GPUFunctions.GPUResample import Resample
+from Tests.helpers.logs import describe_array, log_duration
 
 @pytest.mark.step1
 def test_Resample_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu_device,load_files,resample_grid,cached_cpu_truth,gpu_vs_cpu_plot,compare_data,request):
@@ -35,9 +36,10 @@ def test_Resample_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
     logging.info(f"Output Size: {output_data.size}")
 
     # Run resample step
-    logging.info('Running resample step via GPU')
-    nifti_resampled_gpu = Resample.ResampleFromTo(input_data[file_type],output_nifti,mode='constant',order=order,cval=input_data[file_type].get_fdata().min(),GPUBackend=computing_backend['type'])
+    with log_duration(f"GPU resampling ({computing_backend['type']})"):
+        nifti_resampled_gpu = Resample.ResampleFromTo(input_data[file_type],output_nifti,mode='constant',order=order,cval=input_data[file_type].get_fdata().min(),GPUBackend=computing_backend['type'])
     data_resampled_gpu = nifti_resampled_gpu.get_fdata()
+    describe_array('GPU output', data_resampled_gpu)
     data_resampled_cpu = cached_cpu_truth(
         output_fnames['Output_Truth'],
         lambda: processing.resample_from_to(input_data[file_type],output_nifti,mode='constant',order=order,cval=input_data[file_type].get_fdata().min()).get_fdata(),

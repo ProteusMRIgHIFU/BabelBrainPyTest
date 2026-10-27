@@ -7,6 +7,7 @@ import pytest
 
 from BabelBrain.GPUFunctions.GPUVoxelize import Voxelize
 from BabelBrain.BabelDatasetPreps import FixMesh
+from Tests.helpers.logs import describe_array, log_duration
 from Tests.helpers.report_viewers import slider_viewer_entry
 
 @pytest.mark.step1
@@ -39,8 +40,9 @@ def test_Voxelize_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
      new_affine, _ = resample_grid(input_data['T1W'],spatial_step)
 
      # Run voxelization step
-     logging.info('Running Voxelization via GPU')
-     points_gpu = Voxelize.Voxelize(input_data['skin'],targetResolution=spatial_step,GPUBackend=computing_backend['type'])
+     with log_duration(f"GPU voxelization ({computing_backend['type']})"):
+         points_gpu = Voxelize.Voxelize(input_data['skin'],targetResolution=spatial_step,GPUBackend=computing_backend['type'])
+     describe_array('GPU output', points_gpu)
      points_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                    lambda: input_data['skin'].voxelized(spatial_step,max_iter=30).fill().points)
 

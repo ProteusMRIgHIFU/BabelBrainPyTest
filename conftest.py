@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import sys
+import time
 
 import nibabel
 import numpy as np
@@ -32,12 +33,46 @@ from Tests.helpers.parameters import (CONFIGURATION_MARKERS, CT_TYPE_FILES, CT_T
                                       gen_output_dir, gpu_device, ref_output_dir, ref_output_dir_2,
                                       test_data_folder)
 from Tests.helpers.report_viewers import report_entries_html
+from Tests.helpers.logs import log_duration
 
 print('Using GPU device: ',gpu_device)
 
 # ================================================================================================================================
 # PYTEST FIXTURES
 # ================================================================================================================================
+def _describe_param(value):
+    """Short readable form of a test parameter for the log (datasets, transducers and backends are
+    dicts, pipeline cases are PipelineCase objects)."""
+    if hasattr(value, 'case_id'):
+        return value.case_id
+    if isinstance(value, dict):
+        for key in ('id', 'name', 'type'):
+            if key in value:
+                return str(value[key])
+        return '{' + ', '.join(map(str, value)) + '}'
+    if isinstance(value, np.ndarray):
+        return f"array{value.shape}"
+    text = repr(value)
+    return text if len(text) <= 80 else text[:77] + '...'
+
+
+@pytest.fixture(autouse=True)
+def log_test_progress(request):
+    """Log each test's name and parameters when it starts, and its outcome and duration when it ends,
+    so the live log and PyTest_Reports/pytest.log show which test every message belongs to."""
+    node = request.node
+    logging.info('=' * 30 + f" START {node.nodeid} " + '=' * 30)
+    callspec = getattr(node, 'callspec', None)
+    if callspec is not None and callspec.params:
+        logging.info("Parameters: " + ', '.join(f"{name}={_describe_param(value)}"
+                                                 for name, value in callspec.params.items()))
+    start = time.monotonic()
+    yield
+    call = getattr(node, 'rep_call', None)
+    outcome = call.outcome.upper() if call is not None else 'NOT RUN (setup skipped or failed)'
+    logging.info('=' * 30 + f" {outcome} {node.name} in {time.monotonic() - start:.1f} s " + '=' * 30)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def synthetic_dataset():
     """Generate the synthetic GPU unit test dataset (instant, reused when unchanged)."""
@@ -184,8 +219,8 @@ def cached_cpu_truth():
             logging.info(f"Reloading CPU truth from {fname}")
             return np.load(fname) if fname.endswith('.npy') else nibabel.load(fname).get_fdata()
 
-        logging.info('Generating CPU truth')
-        data = compute()
+        with log_duration('Generating CPU truth'):
+            data = compute()
         logging.info(f"Saving CPU truth to {fname} for future use")
         if fname.endswith('.npy'):
             np.save(fname,data)
@@ -492,7 +527,8 @@ def pytest_collection_modifyitems(config, items):
 def pytest_runtest_makereport(item,call):
     outcome = yield
     report = outcome.get_result()
-    
+    setattr(item, f"rep_{report.when}", report)  # read by log_test_progress
+
     if report.when == 'call':
         extras = getattr(report, 'extras', [])
 

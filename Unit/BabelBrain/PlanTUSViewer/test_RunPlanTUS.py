@@ -7,6 +7,7 @@ runs on the CPU (through SimNIBS), so the test doesn't depend on a GPU or comput
 Requires simnibs_root_path in Tests/config.ini.
 """
 import glob
+import logging
 import os
 import shutil
 import time
@@ -45,6 +46,7 @@ def test_RunPlanTUSBackground(tmp_path):
             pytest.skip(f"Missing PlanTUS input {path}")
 
     # PlanTUS writes next to the mesh, so it works on a copy of the charm folder
+    logging.info(f"Copying {m2m_src} and {t1_src.name} into {tmp_path} (PlanTUS writes next to the mesh)")
     m2m = tmp_path / m2m_src.name
     shutil.copytree(m2m_src, m2m, ignore=shutil.ignore_patterns('PlanTUS'))
     t1_path = tmp_path / t1_src.name
@@ -61,6 +63,7 @@ def test_RunPlanTUSBackground(tmp_path):
     mask_path = tmp_path / (traj_copy.stem + '_PlanTUSMask_T0.nii.gz')
     raddi = tuple(np.ceil(2 / np.array(nibabel.load(str(t1_path)).header.get_zooms()[:3])).astype(int))
     create_target_mask(str(t1_path), RMat[:3, 3], str(mask_path), raddi=raddi)
+    logging.info(f"Target mask around {np.round(RMat[:3, 3], 2)} (radius {raddi} voxels): {mask_path.name}")
 
     # Single element transducer at 500 kHz (Single transducer GUI defaults)
     freq, diameter, focal_length = 500e3, 0.05, 0.05
@@ -79,6 +82,9 @@ def test_RunPlanTUSBackground(tmp_path):
                     IDTarget=traj_copy.stem,
                     bUseGenericTransducerModel=True).ExportYAML(str(tx_config_path))
 
+    logging.info(f"Transducer config: Single at {freq / 1e3:.0f} kHz, diameter {diameter * 1e3:.0f} mm, "
+                 f"skin distance {distance:.1f} mm ({tx_config_path.name})")
+
     scriptbase = str(BABELBRAIN_ROOT / 'BabelBrain' / 'ExternalBin' / 'PlanTUS') + os.sep
     plantus_root = os.path.join(scriptbase, 'PlanTUS')
     assert os.path.isfile(os.path.join(plantus_root, 'PlanTUS_wrapper.py')), f"PlanTUS not bundled at {plantus_root}"
@@ -89,12 +95,17 @@ def test_RunPlanTUSBackground(tmp_path):
     process = Process(target=RunPlanTUSBackground,
                       args=(queue, scriptbase, simnibs, plantus_root, str(t1_path), msh_files[0],
                             str(mask_path), str(tx_config_path)))
+    logging.info(f"Running PlanTUS with SimNIBS {simnibs} (timeout {PLANTUS_TIMEOUT_S / 60:.0f} min), its output follows")
     process.start()
     messages = []
-    deadline = time.time() + PLANTUS_TIMEOUT_S
+    start = time.time()
+    deadline = start + PLANTUS_TIMEOUT_S
     while process.is_alive() or not queue.empty():
         try:
             messages.append(queue.get(timeout=1))
+            for line in messages[-1].splitlines():
+                if line.strip():
+                    logging.info(f"[PlanTUS] {line.rstrip()}")
         except Empty:
             pass
         if time.time() > deadline:
@@ -102,6 +113,7 @@ def test_RunPlanTUSBackground(tmp_path):
             pytest.fail(f"PlanTUS did not finish within {PLANTUS_TIMEOUT_S / 60:.0f} min")
     process.join()
     log = ''.join(messages)
+    logging.info(f"PlanTUS finished in {(time.time() - start) / 60:.1f} min (exit code {process.exitcode})")
 
     assert '--Babel-Brain-Success' in log, f"PlanTUS failed:\n{log[-5000:]}"
     output_dir = m2m / 'PlanTUS' / mask_path.name.replace('.nii.gz', '')

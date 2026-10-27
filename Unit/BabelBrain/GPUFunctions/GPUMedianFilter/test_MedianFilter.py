@@ -6,6 +6,7 @@ import pytest
 from scipy import ndimage
 
 from BabelBrain.GPUFunctions.GPUMedianFilter import MedianFilter
+from Tests.helpers.logs import describe_array, log_duration
 
 @pytest.mark.step1
 def test_MedianFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu_device,load_files,get_resampled_input,cached_cpu_truth,gpu_vs_cpu_plot,compare_data,request):
@@ -39,8 +40,10 @@ def test_MedianFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get
 
      # Run median filter step
      CT_data = np.ascontiguousarray(input_data['CT'].get_fdata().astype(np.uint8))
-     logging.info('Running Median Filter via GPU')
-     data_median_filter_gpu = MedianFilter.MedianFilter(CT_data,filter_size,GPUBackend=computing_backend['type'])
+     describe_array('Input CT', CT_data)
+     with log_duration(f"GPU median filter ({computing_backend['type']})"):
+         data_median_filter_gpu = MedianFilter.MedianFilter(CT_data,filter_size,GPUBackend=computing_backend['type'])
+     describe_array('GPU output', data_median_filter_gpu)
      data_median_filter_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                                lambda: ndimage.median_filter(CT_data,filter_size),
                                                affine=resampled_nifti.affine,dtype=None)

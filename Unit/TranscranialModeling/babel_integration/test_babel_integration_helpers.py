@@ -16,6 +16,7 @@ def test_SaveNiftiEnforcedISO(dataset,load_files,check_data,tmp_path):
     # Run SaveNiftiEnforcedISO
     output_fname_initial = str(tmp_path) + os.sep + 'T1W-isotropic__.nii.gz'
     output_fname_final = str(tmp_path) + os.sep + 'T1W-isotropic.nii.gz'
+    logging.info(f"Input T1W: shape {input_data['T1W'].shape}, voxel size {input_data['T1W'].header.get_zooms()[:3]}")
     BIHelpers.SaveNiftiEnforcedISO(input_data['T1W'], output_fname_initial)
 
     # Check intermediate files are deleted
@@ -26,6 +27,7 @@ def test_SaveNiftiEnforcedISO(dataset,load_files,check_data,tmp_path):
 
     # Load output
     enforced_iso_nifti = nibabel.load(output_fname_final)
+    logging.info(f"Output: shape {enforced_iso_nifti.shape}, voxel size {enforced_iso_nifti.header.get_zooms()[:3]}")
 
     # Check that data is isometric
     isometric = check_data['isometric'](enforced_iso_nifti)

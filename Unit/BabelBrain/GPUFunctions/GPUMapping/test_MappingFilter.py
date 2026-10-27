@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from BabelBrain.GPUFunctions.GPUMapping import MappingFilter
+from Tests.helpers.logs import describe_array, log_duration
 
 @pytest.mark.step1
 def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu_device,load_files,get_resampled_input,cached_cpu_truth,gpu_vs_cpu_plot,compare_data,request):
@@ -47,8 +48,9 @@ def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     logging.info(f"# of UniqueHU values: {len(UniqueHU)}")
 
     # Run mapping step
-    logging.info('Running map filter via GPU')
-    data_map_gpu = MappingFilter.MapFilter(resampled_data_1,SelBone.astype(np.uint8),UniqueHU,GPUBackend=computing_backend['type'])
+    with log_duration(f"GPU mapping filter ({computing_backend['type']})"):
+        data_map_gpu = MappingFilter.MapFilter(resampled_data_1,SelBone.astype(np.uint8),UniqueHU,GPUBackend=computing_backend['type'])
+    describe_array('GPU output', data_map_gpu)
     def map_on_cpu():
         # Index of each bone voxel's value in UniqueHU (sorted), 0 outside bone. One sorted lookup
         # instead of a pass over the volume per unique value, which is very slow at high resolutions
