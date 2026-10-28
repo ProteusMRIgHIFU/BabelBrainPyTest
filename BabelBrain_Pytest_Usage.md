@@ -817,24 +817,27 @@ All applicable unit tests should normally be run.
         </ul>
       </td>
     </tr>
-    <!-- test_RunPlanTUSBackground -->
+    <!-- test_RunPlanTUS.py (all tests) -->
     <tr>
-      <td>test_RunPlanTUSBackground</td>
+      <td>test_RunPlanTUS.py (all tests)</td>
       <td>
         <b>Test dataset:</b><br>
         <ul>
-          <li>ID_0082</li>
+          <li>synthetic (T1 of the synthetic head, trajectories made for it)</li>
         </ul>
-        <b>Transducer/Frequency/Trajectory:</b><br>
+        <b>Transducer/Frequency:</b><br>
         <ul>
-          <li>Single/500kHz/Superficial Target (left)</li>
+          <li>CTX_500/500kHz</li>
+        </ul>
+        <b>Trajectory:</b><br>
+        <ul>
+          <li>Brainsight and Slicer, single and combined targets</li>
         </ul>
       </td>
       <td>
         <ul>
-          <li>Test planTUS feature just to ensure it runs</li>
-          <li>PlanTUS runs on the CPU (through SimNIBS), so it doesn't depend on a GPU or computing backend</li>
-          <li>Requires simnibs_root_path in config.ini, skipped on BabelBrain versions without PlanTUS</li>
+          <li>BabelBrain's side of PlanTUS without running it: PlanTUSTxConfig.yaml (has every key PlanTUS_wrapper.py requires), target mask, PlanTUS command line, recalculate/reload prompt, success/error reporting, and the accepted PlanTUS trajectory written back as the _PlanTUS file</li>
+          <li>No SimNIBS, GPU or test data needed, runs in seconds</li>
         </ul>
       </td>
     </tr>
@@ -912,6 +915,27 @@ Integration testing should cover the major supported component interactions.
           <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
           <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
+    </tr>
+    <!-- test_plantus.py (all tests) -->
+    <tr>
+      <td>test_plantus.py (all tests)</td>
+      <td>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>ernie</li>
+        </ul>
+        <b>Transducer/Frequency/Trajectory:</b><br>
+        <ul>
+          <li>CTX_500/500kHz/Superficial Target (left), Brainsight</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>The real PlanTUS run from BabelBrain (RUN_PLAN_TUS.Execute, RunPlanTUSBackground, the bundled run script and SimNIBS): skin maps for the target, reloading existing results, the placement for the best scoring vertex, the _PlanTUS trajectory BabelBrain continues with, and BabelBrain's PlanTUS viewers on the outputs</li>
+          <li>PlanTUS' own viewer is skipped (--skip_viewer) and the placement it would hand to BabelBrain is taken directly</li>
+          <li>PlanTUS runs on the CPU, so it doesn't depend on a GPU or computing backend. Slow (~2 min); requires simnibs_root_path in config.ini, skipped on BabelBrain versions without PlanTUS</li>
         </ul>
       </td>
     </tr>

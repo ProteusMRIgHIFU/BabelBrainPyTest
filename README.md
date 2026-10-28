@@ -102,7 +102,7 @@ host = <server address>
 - `ref_output_folder_1` contains previously generated BabelBrain outputs used as the reference in regression tests.
 - `ref_output_folder_2` contains a second set of generated outputs, for comparing two output folders with each other.
 - `gen_output_folder` is where generated outputs are stored (generate_outputs and regression tests).
-- `simnibs_root_path` is the SimNIBS install folder (the one containing `simnibs_env`). Only the soft tissue segmentation regression cases and the PlanTUS test need it; they are skipped without it.
+- `simnibs_root_path` is the SimNIBS install folder (the one containing `simnibs_env`). Only the soft tissue segmentation regression cases and the PlanTUS integration test need it; they are skipped without it.
 - The optional `[Remote]` section points the remote server E2E test at an existing BabelBrain job server; without it the test starts a local one.
 
 ## Test data
@@ -175,7 +175,7 @@ BabelBrain/
 │     │    └── TranscranialModeling/
 │     │         └── babel_integration/
 │     │              └── test_babel_integration_helpers.py
-│     ├── Integration/              (components working together, e.g. test_vtk_visualization.py, test_remote_server_connection.py)
+│     ├── Integration/              (components working together, e.g. test_vtk_visualization.py, test_remote_server_connection.py, test_plantus.py)
 │     ├── E2E/
 │     ├── Regression/
 │     └── Generate_Outputs/
