@@ -488,6 +488,20 @@ Unit tests should focus primarily on code affected by the release.
         </ul>
       </td>
     </tr>
+    <!-- test_RemoteServers.py, test_client_functions.py, test_server.py (all tests) -->
+    <tr>
+      <td>test_RemoteServers.py<br>test_client_functions.py<br>test_server.py<br>(all tests)</td>
+      <td>
+        None (no network, GPU or test data needed; TLS certificates are made with openssl)
+      </td>
+      <td>
+        <ul>
+          <li>Remote server settings: saved server list, URLs, bearer token headers, client TLS settings (trusted CA, insecure, mutual TLS)</li>
+          <li>Server side: HTTPS / mutual TLS context, loopback detection, refusing to start on a network address without a token or with a bad certificate, upload names can't leave their workspace, job spec validation</li>
+          <li>Skipped on BabelBrain versions without remote servers</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 
@@ -537,6 +551,27 @@ Integration testing should cover the primary interactions affected by the releas
           <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
           <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
+    </tr>
+    <!-- test_remote_server_connection.py (all tests) -->
+    <tr>
+      <td>test_remote_server_connection.py (all tests)</td>
+      <td>
+        <b>Connection protocols:</b><br>
+        <ul>
+          <li>HTTP, HTTP + bearer token</li>
+          <li>HTTPS (private CA, self-signed, insecure), HTTPS + token</li>
+          <li>Mutual TLS (client certificate) + token</li>
+        </ul>
+        Each with the right and the wrong client settings. No GPU or test data needed
+      </td>
+      <td>
+        <ul>
+          <li>The server's real HTTP front end on a loopback port, against BabelBrain's connection check (RemoteServers.test_connection) and the remote pipeline's requests (client_functions)</li>
+          <li>Right settings must connect and move data (workspace upload); wrong ones must be refused with a readable reason (missing/wrong token, untrusted certificate, protocol mismatch, missing or foreign client certificate)</li>
+          <li>Uploads can't leave their workspace, every endpoint except /healthz needs the token</li>
+          <li>TLS cases need openssl to make test certificates; the full pipeline on a remote server is e2e_test_remote_full_pipeline</li>
         </ul>
       </td>
     </tr>
@@ -816,6 +851,20 @@ All applicable unit tests should normally be run.
         </ul>
       </td>
     </tr>
+    <!-- test_RemoteServers.py, test_client_functions.py, test_server.py (all tests) -->
+    <tr>
+      <td>test_RemoteServers.py<br>test_client_functions.py<br>test_server.py<br>(all tests)</td>
+      <td>
+        None (no network, GPU or test data needed; TLS certificates are made with openssl)
+      </td>
+      <td>
+        <ul>
+          <li>Remote server settings: saved server list, URLs, bearer token headers, client TLS settings (trusted CA, insecure, mutual TLS)</li>
+          <li>Server side: HTTPS / mutual TLS context, loopback detection, refusing to start on a network address without a token or with a bad certificate, upload names can't leave their workspace, job spec validation</li>
+          <li>Skipped on BabelBrain versions without remote servers</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 
@@ -863,6 +912,27 @@ Integration testing should cover the major supported component interactions.
           <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
           <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
+        </ul>
+      </td>
+    </tr>
+    <!-- test_remote_server_connection.py (all tests) -->
+    <tr>
+      <td>test_remote_server_connection.py (all tests)</td>
+      <td>
+        <b>Connection protocols:</b><br>
+        <ul>
+          <li>HTTP, HTTP + bearer token</li>
+          <li>HTTPS (private CA, self-signed, insecure), HTTPS + token</li>
+          <li>Mutual TLS (client certificate) + token</li>
+        </ul>
+        Each with the right and the wrong client settings. No GPU or test data needed
+      </td>
+      <td>
+        <ul>
+          <li>The server's real HTTP front end on a loopback port, against BabelBrain's connection check (RemoteServers.test_connection) and the remote pipeline's requests (client_functions)</li>
+          <li>Right settings must connect and move data (workspace upload); wrong ones must be refused with a readable reason (missing/wrong token, untrusted certificate, protocol mismatch, missing or foreign client certificate)</li>
+          <li>Uploads can't leave their workspace, every endpoint except /healthz needs the token</li>
+          <li>TLS cases need openssl to make test certificates; the full pipeline on a remote server is e2e_test_remote_full_pipeline</li>
         </ul>
       </td>
     </tr>

@@ -163,6 +163,7 @@ BabelBrain/
 │     │    │    ├── test_BabelBrain.py
 │     │    │    ├── test_BabelDatasetPreps.py
 │     │    │    ├── test_FileManager.py
+│     │    │    ├── test_RemoteServers.py, test_client_functions.py, test_server.py
 │     │    │    ├── GPUFunctions/
 │     │    │    │    ├── GPUBinaryClosing/test_BinaryClosing.py
 │     │    │    │    ├── GPUResample/test_Resample.py
@@ -174,7 +175,7 @@ BabelBrain/
 │     │    └── TranscranialModeling/
 │     │         └── babel_integration/
 │     │              └── test_babel_integration_helpers.py
-│     ├── Integration/              (components working together, e.g. test_vtk_visualization.py)
+│     ├── Integration/              (components working together, e.g. test_vtk_visualization.py, test_remote_server_connection.py)
 │     ├── E2E/
 │     ├── Regression/
 │     └── Generate_Outputs/
