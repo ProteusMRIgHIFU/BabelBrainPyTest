@@ -302,6 +302,13 @@ COMBINED_TRAJECTORIES_SIM_PARAMS = {
     'target': 'Superficial_Targets',
 }
 
+# Soft tissue segmentation on the quick configuration: Step 1 segments the soft tissue (needs
+# SimNIBS, simnibs_root_path in Tests/config.ini). Run as regression_test_full_pipeline_soft_tissue.
+SOFT_TISSUE_SIM_PARAMS = {
+    **QUICK_SIM_PARAMS,
+    'soft_tissue_segmentation': [True],
+}
+
 # Intensive configuration: a high frequency phased array with CT and long sonications. Run as 
 # regression_test_full_pipeline_intensive, and selected in the older E2E/generate-outputs tests 
 # by the intensive_babelbrain_params marker. Fields as in REGRESSION_CASES.
@@ -333,6 +340,7 @@ INTENSIVE_SIM_PARAMS = {
 REGRESSION_CASES = {
     'regression_test_full_pipeline': BASIC_PARAMS,
     'regression_test_full_pipeline_intensive': INTENSIVE_SIM_PARAMS,
+    'regression_test_full_pipeline_soft_tissue': SOFT_TISSUE_SIM_PARAMS,
     'regression_test_GetSkullMaskFromSimbNIBSSTL': {
         'dataset': 'ID_0082',
         'trajectory_type': 'brainsight',

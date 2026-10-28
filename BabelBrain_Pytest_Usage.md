@@ -1183,6 +1183,41 @@ Regression testing for a major release should provide broader coverage than for 
         </ul>
       </td>
     </tr>
+    <!-- regression_test_full_pipeline_soft_tissue -->
+    <tr>
+      <td>regression_test_full_pipeline_soft_tissue</td>
+      <td>
+        <b>Computing backend:</b><br>
+        <ul>
+          <li>CUDA</li>
+          <li>OpenCL</li>
+          <li>Metal</li>
+        </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>Ernie</li>
+        </ul>
+        <b>CT Type:</b><br>
+        <ul>
+          <li>NONE</li>
+        </ul>
+        <b>Transducer/Frequency/Trajectory:</b>
+        <ul>
+          <li>CTX_500/500kHz/Superficial</li>
+        </ul>
+        <b>Advanced Options – Step 1 soft tissue segmentation:</b>
+        <ul>
+          <li>Enabled</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>Tests full pipeline with soft tissue segmentation</li>
+          <li>Requires SimNIBS</li>
+          <li>3 total tests</li>
+        </ul>
+      </td>
+    </tr>
     <!-- regression_test_GetSkullMaskFromSimbNIBSSTL -->
     <tr>
       <td>regression_test_GetSkullMaskFromSimbNIBSSTL</td>
