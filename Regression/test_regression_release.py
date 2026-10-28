@@ -13,7 +13,8 @@ Each regression test comes in two parts:
 
 Saved outputs from the same BabelBrain commit are reused across tests and sessions
 (set BABEL_PYTEST_REGENERATE=1 to force a rerun). To create reference outputs, check
-out the reference BabelBrain version (v0.8.1), point gen_output_folder at the
+out the reference BabelBrain version (see Table 1 in BabelBrain_Pytest_Usage.md),
+point gen_output_folder at the
 reference location and run only the generate tests:
 
     pytest Tests/Regression -m generate_outputs

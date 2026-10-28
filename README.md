@@ -446,7 +446,9 @@ What each set contains:
 
 Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report.
 
-The regression tests in [Regression](Regression) generate their outputs first (`test_generate_*`, marked `generate_outputs`) and then compare them against `<ref_output_folder_1>/<suite>/<case id>`, so a failed comparison never throws away a finished simulation. To create references, check out the reference BabelBrain version, point `gen_output_folder` at the reference location and run:
+The regression tests in [Regression](Regression) generate their outputs first (`test_generate_*`, marked `generate_outputs`) and then compare them against `<ref_output_folder_1>/<suite>/<case id>`, so a failed comparison never throws away a finished simulation.
+
+References are generated with the **reference BabelBrain version** listed in Table 1 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), not the current repo. To create them, check out that version, point `gen_output_folder` at the reference location and run:
 
 ```bash
 pytest Tests/Regression -m generate_outputs
