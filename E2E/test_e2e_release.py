@@ -22,6 +22,14 @@ e2e_test_combined_trajectories_full_pipeline
     merged with Combine Trajectories in steps 2 and 3. Checks that both trajectories and the merged
     result have their outputs.
 
+e2e_test_vtk_visualization_full_pipeline
+    Full pipeline on the quick configuration (parameters.VTK_VISUALIZATION_SIM_PARAMS) with the VTK
+    viewer opened after step 1, so steps 2 and 3 push their results into it as in the GUI. After each
+    step the viewer must show that step's results (the data BabelBrain keeps for its plots) with
+    BabelBrain's display settings, and closing and reopening it must rebuild every layer. Screenshots
+    of the viewer and the GUI after each step go to the report. Runs every time (it needs the live
+    BabelBrain window), its outputs aren't saved.
+
 The multipoint and combined trajectories runs are saved in <gen_output_folder>/<suite>/<case_id>
 and reused by later sessions on the same BabelBrain commit (see pipeline_helpers.ensure_case_outputs).
 """
@@ -36,8 +44,12 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
+
+import Tests.helpers.pipeline_helpers as rh
+from Tests.helpers import vtk_viewer_helpers as vh
 
 from Tests.helpers.parameters import (BABELBRAIN_ROOT, CUSTOM_TX_EQUIVALENTS,
                               CUSTOM_TX_TEMPLATES_DIR, E2E_CASES, RELEASE_BACKENDS,
@@ -71,6 +83,8 @@ REMOTE_CASES = cases_from_spec(E2E_CASES['e2e_test_remote_full_pipeline'], [pyte
 MULTIPOINT_CASES = cases_from_spec(E2E_CASES['e2e_test_multipoint_full_pipeline'], [pytest.mark.slow])
 COMBINED_TRAJECTORIES_CASES = cases_from_spec(E2E_CASES['e2e_test_combined_trajectories_full_pipeline'],
                                               [pytest.mark.slow])
+VTK_VISUALIZATION_CASES = cases_from_spec(E2E_CASES['e2e_test_vtk_visualization_full_pipeline'],
+                                          [pytest.mark.slow])
 
 
 # ================================================================================================================================
@@ -271,3 +285,79 @@ def test_e2e_combined_trajectories_full_pipeline(pipeline, case):
     assert merged_thermal, f"No combined thermal output (Merged_DataForSim-ThermalField*.h5) in {output_dir}"
     assert len(trajectory_thermal) >= 2, \
         f"Expected a thermal output for each of the two trajectories in {output_dir}, found {trajectory_thermal}"
+
+
+def _run_step(step, qtbot, bb, screenshots):
+    try:
+        if step == 1:
+            rh.run_pipeline(qtbot, bb, last_step=1, screenshots=screenshots, image_to_base64=vh.image_to_base64)
+        else:
+            rh.run_step(qtbot, bb, step, screenshots=screenshots, image_to_base64=vh.image_to_base64)
+    except rh.PipelineError as error:
+        pytest.fail(str(error))
+
+
+def _assert_layer_matches(viewer, layer_id, nifti):
+    np.testing.assert_allclose(vh.layer_data(viewer, layer_id), np.asarray(nifti.dataobj, dtype=np.float32),
+                               rtol=1e-6, atol=1e-6, err_msg=f"{layer_id} layer differs from BabelBrain's result")
+
+
+@requires_feature('vtk_viewer')
+@pytest.mark.parametrize('case', VTK_VISUALIZATION_CASES)
+def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case, viewer_screenshots):
+    rh.auto_answer_dialogs(monkeypatch)
+    bb = rh.build_babelbrain(qtbot, case, tmp_path / case.case_id)
+    gui = viewer_screenshots.entries  # GUI screenshots after each step go next to the viewer's
+
+    # Step 1, then open the viewer
+    assert not bb.Widget.vtkVisualizationqPushButton.isEnabled()
+    _run_step(1, qtbot, bb, gui)
+    assert bb.Widget.vtkVisualizationqPushButton.isEnabled()
+    bb.Widget.vtkVisualizationqPushButton.click()
+    window = bb._vtk_visualization
+    qtbot.addWidget(window)
+    viewer = window.viewer[0]
+    viewer_screenshots.add(viewer, f"Step 1: {case.case_id}")
+
+    assert window.tabs.tabText(0) == bb.Config['ID'][0]
+    assert vh.layer_ids(viewer) == ['', 'T1W']
+    _assert_layer_matches(viewer, '', bb._MaskNib[0])
+    _assert_layer_matches(viewer, 'T1W', bb._T1WNib[0])
+    focal = np.argwhere(np.asarray(bb._MaskNib[0].dataobj) == vh.FOCAL_LABEL)[0]
+    assert vh.slider_values(viewer) == [focal[1], focal[0], focal[2]]
+
+    # Step 2 with the viewer open
+    _run_step(2, qtbot, bb, gui)
+    viewer_screenshots.add(viewer, "Step 2: skull pressure (Jet, cutoff 0.25), water field hidden")
+    assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water']
+    _assert_layer_matches(viewer, 'Skull', bb._NiftiSkull[0])
+    _assert_layer_matches(viewer, 'Water', bb._NiftiWater[0])
+    skull = vh.layer_data(viewer, 'Skull')
+    assert skull.max() > 0, "empty skull pressure field"
+    assert vh.layer(viewer, 'Skull').visible and not vh.layer(viewer, 'Water').visible
+    assert vh.layer(viewer, 'Skull').cutoff == 0.25
+    peak = np.unravel_index(np.argmax(skull), skull.shape)
+    logging.info(f"Skull pressure peak at voxel {peak}, focal point voxel {tuple(focal)}")
+
+    # Step 3 with the viewer open
+    _run_step(3, qtbot, bb, gui)
+    viewer_screenshots.add(viewer, "Step 3: intensity (cutoff 0.1), temperature and Step 2 fields hidden")
+    assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water', 'Intensity', 'Temperature']
+    _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
+    _assert_layer_matches(viewer, 'Temperature', bb._NiftiTemperature[0])
+    assert [vh.layer(viewer, i).visible for i in ('Skull', 'Water', 'Intensity', 'Temperature')] == \
+        [False, False, True, False]
+    assert vh.layer_data(viewer, 'Temperature').max() > 37.0, "no heating in the temperature map"
+
+    # Closing and reopening rebuilds the viewer with every result
+    shown = {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)}
+    window.close()
+    assert not hasattr(bb, '_vtk_visualization')
+    bb.Widget.vtkVisualizationqPushButton.click()
+    window = bb._vtk_visualization
+    qtbot.addWidget(window)
+    viewer = window.viewer[0]
+    viewer_screenshots.add(viewer, "Reopened after Step 3")
+    assert {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)} == shown
+    _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
+    window.close()

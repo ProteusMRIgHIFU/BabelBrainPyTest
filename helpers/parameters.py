@@ -302,6 +302,12 @@ COMBINED_TRAJECTORIES_SIM_PARAMS = {
     'target': 'Superficial_Targets',
 }
 
+# VTK visualization on the quick configuration: steps 2 and 3 run with the VTK viewer open, which
+# must show each step's results. Run as e2e_test_vtk_visualization_full_pipeline.
+VTK_VISUALIZATION_SIM_PARAMS = {
+    **QUICK_SIM_PARAMS,
+}
+
 # Soft tissue segmentation on the quick configuration: Step 1 segments the soft tissue (needs
 # SimNIBS, simnibs_root_path in Tests/config.ini). Run as regression_test_full_pipeline_soft_tissue.
 SOFT_TISSUE_SIM_PARAMS = {
@@ -363,6 +369,7 @@ E2E_CASES = {
     'e2e_test_remote_full_pipeline': REMOTE_SIM_PARAMS,
     'e2e_test_multipoint_full_pipeline': MULTIPOINT_SIM_PARAMS,
     'e2e_test_combined_trajectories_full_pipeline': COMBINED_TRAJECTORIES_SIM_PARAMS,
+    'e2e_test_vtk_visualization_full_pipeline': VTK_VISUALIZATION_SIM_PARAMS,
 }
 
 # Every parameter set a release test runs, checked by Consistency/test_suite_consistency.py

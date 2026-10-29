@@ -135,4 +135,6 @@ def report_entries_html(entries):
             # Legacy entries: plain base64-encoded webp strings
             row_tags += "<td><img src='data:image/webp;base64,{}' width='500'></td>".format(entry)
     flush_row()
-    return ''.join(html_parts)
+    # The rows need their table: pytest-html inserts extras into a <div>, where the browser drops
+    # stray <tr>/<td> tags and every image ends up on its own line
+    return f"<table>{''.join(html_parts)}</table>"

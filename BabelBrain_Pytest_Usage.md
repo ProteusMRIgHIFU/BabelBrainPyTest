@@ -479,11 +479,23 @@ Unit tests should focus primarily on code affected by the release.
     <tr>
       <td>test_nifti_viewer.py (all tests)</td>
       <td>
-        None (small synthetic volumes, no GPU or test data needed)
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>Small block volumes (geometry, loading, navigation, layer controls)</li>
+          <li>synthetic (tissue mask, T1W and CT of the synthetic head, rendered)</li>
+        </ul>
+        <b>View modes:</b><br>
+        <ul>
+          <li>Affine, medical radiological, medical neurological</li>
+        </ul>
+        No GPU or test data needed
       </td>
       <td>
         <ul>
           <li>VTK visualization window (GUIComponents/nifti_viewer.py): affine/RAS geometry, NIfTI loading, colour maps and cutoff, slice navigation in affine and medical modes, layer controls, overlay removal, window/level reset, screenshots, one viewer per trajectory</li>
+          <li>Synthetic head rendered through the viewer tab's toolbar (view modes, neurological flip, crosshairs, RAS boxes, reset, Screenshot button), with screenshots of every view in the report</li>
+          <li>Crosshair drawn when the target is on the middle slices, medical slice grid centre with partial voxel extents</li>
+          <li>Tissue label colours are a strict xfail: the label table is applied over the mask's data range, so the labels show the wrong colours</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
         </ul>
       </td>
@@ -544,12 +556,18 @@ Integration testing should cover the primary interactions affected by the releas
           <li>Single trajectory</li>
           <li>Two trajectories (combined trajectory file)</li>
         </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>Small block volumes</li>
+          <li>synthetic (Step 1 domain from the synthetic head, with and without CT and air regions)</li>
+        </ul>
         Synthetic Step 1/2/3 results, no GPU or test data needed
       </td>
       <td>
         <ul>
           <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
           <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
+          <li>Synthetic head: CT (HU from its look-up table) and air region overlays, each step's layers and display settings, two trajectory tabs and merged fields, with screenshots of the viewer after each step in the report</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
         </ul>
       </td>
@@ -845,11 +863,23 @@ All applicable unit tests should normally be run.
     <tr>
       <td>test_nifti_viewer.py (all tests)</td>
       <td>
-        None (small synthetic volumes, no GPU or test data needed)
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>Small block volumes (geometry, loading, navigation, layer controls)</li>
+          <li>synthetic (tissue mask, T1W and CT of the synthetic head, rendered)</li>
+        </ul>
+        <b>View modes:</b><br>
+        <ul>
+          <li>Affine, medical radiological, medical neurological</li>
+        </ul>
+        No GPU or test data needed
       </td>
       <td>
         <ul>
           <li>VTK visualization window (GUIComponents/nifti_viewer.py): affine/RAS geometry, NIfTI loading, colour maps and cutoff, slice navigation in affine and medical modes, layer controls, overlay removal, window/level reset, screenshots, one viewer per trajectory</li>
+          <li>Synthetic head rendered through the viewer tab's toolbar (view modes, neurological flip, crosshairs, RAS boxes, reset, Screenshot button), with screenshots of every view in the report</li>
+          <li>Crosshair drawn when the target is on the middle slices, medical slice grid centre with partial voxel extents</li>
+          <li>Tissue label colours are a strict xfail: the label table is applied over the mask's data range, so the labels show the wrong colours</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
         </ul>
       </td>
@@ -908,12 +938,18 @@ Integration testing should cover the major supported component interactions.
           <li>Single trajectory</li>
           <li>Two trajectories (combined trajectory file)</li>
         </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>Small block volumes</li>
+          <li>synthetic (Step 1 domain from the synthetic head, with and without CT and air regions)</li>
+        </ul>
         Synthetic Step 1/2/3 results, no GPU or test data needed
       </td>
       <td>
         <ul>
           <li>BabelBrain's VTK visualization methods against the real viewer: opening the window after Step 1, adding/replacing Step 2 and Step 3 results per trajectory, merged results in every tab, closing and reopening</li>
           <li>Rerunning Step 1 with the viewer open refreshes it and still updates the Step 2 tab (caught the missing bFullyPopulate default fixed in 76718715)</li>
+          <li>Synthetic head: CT (HU from its look-up table) and air region overlays, each step's layers and display settings, two trajectory tabs and merged fields, with screenshots of the viewer after each step in the report</li>
           <li>Skipped on BabelBrain versions without the VTK viewer</li>
         </ul>
       </td>
@@ -1105,7 +1141,42 @@ Major releases should exercise the main supported workflows across representativ
         </ul>
       </td>
     </tr>
-    
+    <!-- e2e_test_vtk_visualization_full_pipeline -->
+    <tr>
+      <td>e2e_test_vtk_visualization_full_pipeline</td>
+      <td>
+        <b>Computing backend:</b><br>
+        <ul>
+          <li>CUDA</li>
+          <li>OpenCL</li>
+          <li>Metal</li>
+        </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>ernie</li>
+        </ul>
+        <b>CT Type:</b><br>
+        <ul>
+          <li>NONE</li>
+        </ul>
+        <b>Thermal Profile:</b><br>
+        <ul>
+          <li>pytest_thermal_profile_1</li>
+        </ul>
+        <b>Transducer/Frequency/Trajectory:</b>
+        <ul>
+          <li>CTX_500/500kHz/Superficial Target (left)</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>Tests the VTK visualization on the quick configuration (QUICK_SIM_PARAMS): the viewer is opened after step 1, so steps 2 and 3 push their results into it as in the GUI</li>
+          <li>Checks that each step's layers hold the same data BabelBrain keeps for its plots, with its display settings, and that closing and reopening the viewer rebuilds every layer</li>
+          <li>Screenshots of the viewer and the GUI after each step in the report</li>
+          <li>3 total tests</li>
+        </ul>
+      </td>
+    </tr>
   </tbody>
 </table>
 

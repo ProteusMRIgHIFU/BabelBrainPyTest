@@ -521,6 +521,24 @@ def run_pipeline(qtbot, bb, last_step=3, screenshots=None, image_to_base64=None,
     logging.info(f"Pipeline finished in {_elapsed(pipeline_start)}")
 
 
+def run_step(qtbot, bb, step, screenshots=None, image_to_base64=None):
+    """Run step 2 or 3 on a single trajectory BabelBrain widget whose previous steps already ran (e.g.
+    run_pipeline(last_step=1)), as clicking its Calculate button does. Raises PipelineError on failure."""
+    if trajectory_count(bb) != 1:
+        raise PipelineError("run_step runs single trajectory widgets, use run_pipeline for combined trajectories")
+    bb.testing_error = False
+    bb.Widget.tabWidget.setCurrentIndex(step - 1)
+    logging.info(f"{STEP_NAMES[step]}: started")
+    if step == 2:
+        _set_cone_distance(bb)
+        bb.AcSim.Widget.CalculateAcField.click()
+    elif step == 3:
+        bb.ThermalSim.Widget.CalculateThermal.click()
+    else:
+        raise ValueError(f"run_step runs step 2 or 3, not {step}")
+    _wait_for_step(qtbot, bb, step, screenshots, image_to_base64)
+
+
 def thermal_outputs(folder):
     return sorted(glob.glob(os.path.join(str(folder), '**', '*DataForSim-ThermalField-Duration*.h5'), recursive=True))
 

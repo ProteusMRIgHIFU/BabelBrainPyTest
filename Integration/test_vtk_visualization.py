@@ -12,7 +12,10 @@ synthetic Step 1/2/3 results the way the GUI does when each step finishes:
     Step 3  UpdateNiftiTemperatureResults (and UpdateNiftiMergedThermalResults)
 
 Only the parts unrelated to the viewer (Step 1 plots, the Step 2 tab, the clock dialog) are stubbed,
-so no GPU or test data is needed.
+so no GPU or test data is needed. Most tests use small block volumes; the synthetic head tests use
+the synthetic dataset's tissue mask, T1W and CT (with BabelBrain's CT and air region overlays) and
+put screenshots of the viewer after each step in the report. The real pipeline with the viewer
+open is e2e_test_vtk_visualization_full_pipeline (E2E/test_e2e_release.py).
 """
 import functools
 import logging
@@ -23,6 +26,7 @@ import nibabel
 import numpy as np
 import pytest
 
+from Tests.helpers import vtk_viewer_helpers as vh
 from Tests.helpers.parameters import requires_feature
 
 pytestmark = [requires_feature('vtk_viewer'), pytest.mark.minor_release, pytest.mark.major_release]
@@ -139,6 +143,26 @@ class _Harness:
         for n, target in enumerate(targets):
             nibabel.save(_mask(target), self._outnameMask[n])
             nibabel.save(_field(target), self._T1W_resampled_fname[n])
+            self._TrajectoryNumber = n
+            self.UpdateMask()
+
+    def run_step1_synthetic(self, targets, ct=False, air=False):
+        """Step 1 on the synthetic head (one focal point per trajectory), saving what Step 1 writes
+        with a CT: <prefix>CT.nii.gz (HU look-up indices), CT-cal.npz and AirRegions.nii.gz."""
+        logging.info(f"Step 1 on the synthetic head, {len(targets)} trajectory(ies), focal point voxels {targets}"
+                     f"{', with CT' if ct else ''}{' and air regions' if air else ''}")
+        self.Config['bUseCT'] = ct
+        self.Config['bExtractAirRegions'] = air
+        self._reset_results(len(targets))
+        for n, target in enumerate(targets):
+            nibabel.save(vh.synthetic_mask(target), self._outnameMask[n])
+            nibabel.save(vh.synthetic_t1(), self._T1W_resampled_fname[n])
+            if ct:
+                indices, unique_hu = vh.synthetic_ct_indices()
+                nibabel.save(indices, self._prefix_path[n] + 'CT.nii.gz')
+                np.savez(self._prefix_path[n] + 'CT-cal.npz', UniqueHU=unique_hu)
+            if air:
+                nibabel.save(vh.synthetic_air_mask(), self._prefix_path[n] + 'AirRegions.nii.gz')
             self._TrajectoryNumber = n
             self.UpdateMask()
 
@@ -323,3 +347,105 @@ def test_rerunning_step1_with_viewer_open_multiple_trajectories(harness_factory)
     assert h.UpdateAcousticTab.call_count == 4
     assert [vp._slider.value() for vp in window.viewer[0]._vps] == [11, 9, 13]
     assert [vp._slider.value() for vp in window.viewer[1]._vps] == [17, 15, 19]
+
+
+# ================================================================================================================================
+# SYNTHETIC HEAD (screenshots in the report)
+# ================================================================================================================================
+LEFT, RIGHT = (14, 24, 26), (26, 16, 24)  # focal point voxels of the synthetic head's two trajectories
+
+
+def _row(viewer, layer_id):
+    return viewer._layer_panel._rows[_layers(viewer).index(layer_id)]
+
+
+def _steps_fields(t1, peak):
+    """Step 2 (skull, water) and Step 3 (intensity, temperature) results peaking at `peak`."""
+    return (vh.gaussian_field(t1, peak), vh.gaussian_field(t1, peak, width=5),
+            vh.gaussian_field(t1, peak, scale=0.8), vh.gaussian_field(t1, peak, scale=3, offset=37))
+
+
+def test_synthetic_head_ct_and_air_overlays(harness_factory, viewer_screenshots):
+    """With a CT, Step 1's CT (HU from its look-up table, bone only) and air regions are overlaid on
+    the domain the way _UpdateVTKDomain sets them up."""
+    h = harness_factory(['synthetic'])
+    h.run_step1_synthetic([vh.SYNTHETIC_TARGET], ct=True, air=True)
+    viewer = h.open_viewer().viewer[0]
+    pixels = viewer_screenshots.add(viewer, "Step 1 domain with CT and air regions")
+
+    assert _layers(viewer) == ['', 'T1W', 'CT', 'Air']
+    indices, unique_hu = vh.synthetic_ct_indices()
+    np.testing.assert_allclose(vh.layer_data(viewer, 'CT'), unique_hu[np.asarray(indices.dataobj)])
+    np.testing.assert_array_equal(vh.layer_data(viewer, 'Air'), np.asarray(vh.synthetic_air_mask().dataobj))
+    for layer_id in ('CT', 'Air'):
+        rec = vh.layer(viewer, layer_id)
+        assert rec.opacity == pytest.approx(0.5) and rec.cutoff == 1.0 and rec.visible
+    assert vh.layer(viewer, 'Air').cmap == _row(viewer, 'Air')._cmap_combo.itemText(4)
+    assert vh.slider_values(viewer) == [vh.SYNTHETIC_TARGET[1], vh.SYNTHETIC_TARGET[0], vh.SYNTHETIC_TARGET[2]]
+    assert pixels.std() > 20
+
+
+def test_synthetic_head_all_steps(harness_factory, viewer_screenshots):
+    """The viewer open through Steps 1 to 3 on the synthetic head: each step's results are added
+    with BabelBrain's display settings, and the previous step's fields are hidden."""
+    h = harness_factory(['synthetic'])
+    h.run_step1_synthetic([vh.SYNTHETIC_TARGET])
+    window = h.open_viewer()
+    viewer = window.viewer[0]
+    step1 = viewer_screenshots.add(viewer, "Step 1: tissue mask and T1W (50 %)")
+    assert _layers(viewer) == ['', 'T1W']
+
+    t1 = vh.synthetic_t1()
+    skull, water, intensity, temperature = _steps_fields(t1, vh.SYNTHETIC_TARGET)
+    h.UpdateNiftiAcResults(skull, water, 0)
+    step2 = viewer_screenshots.add(viewer, "Step 2: skull pressure (Jet, cutoff 0.25), water field hidden")
+    assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water']
+    np.testing.assert_allclose(vh.layer_data(viewer, 'Skull'), skull.get_fdata())
+    assert _visible(viewer, 'Skull') and not _visible(viewer, 'Water')
+    assert viewer._selected_vol == _layers(viewer).index('Skull')  # window/level follows the skull field
+
+    h.UpdateNiftiTemperatureResults(intensity, temperature, 0)
+    step3 = viewer_screenshots.add(viewer, "Step 3: intensity (cutoff 0.1), temperature hidden, Step 2 fields hidden")
+    assert _layers(viewer)[-2:] == ['Intensity', 'Temperature']
+    np.testing.assert_allclose(vh.layer_data(viewer, 'Temperature'), temperature.get_fdata())
+    assert [_visible(viewer, i) for i in ('Skull', 'Water', 'Intensity', 'Temperature')] == [False, False, True, False]
+    assert vh.layer(viewer, 'Intensity').cutoff == 0.1
+    assert viewer._selected_vol == _layers(viewer).index('Intensity')
+
+    _row(viewer, 'Temperature')._eye_btn.setChecked(True)
+    _row(viewer, 'Intensity')._eye_btn.setChecked(False)
+    temperature_view = viewer_screenshots.add(viewer, "Step 3: temperature shown instead (cutoff 37.05)")
+
+    # Each step changes the views, around the focal point only
+    for before, after in [(step1, step2), (step2, step3), (step3, temperature_view)]:
+        changed = np.abs(before.astype(int) - after.astype(int)).max(axis=-1) > 30
+        assert 0.001 < changed.mean() < 0.5
+
+
+def test_synthetic_head_two_trajectories(harness_factory, viewer_screenshots):
+    """Two trajectories: each tab opens on its own focal point and gets its own results; Combine
+    Trajectories adds the merged fields to both tabs."""
+    h = harness_factory(['left', 'right'])
+    h.run_step1_synthetic([LEFT, RIGHT])
+    window = h.open_viewer()
+    viewer_screenshots.add_window(window, "Step 1")
+    assert vh.slider_values(window.viewer[0]) == [LEFT[1], LEFT[0], LEFT[2]]
+    assert vh.slider_values(window.viewer[1]) == [RIGHT[1], RIGHT[0], RIGHT[2]]
+
+    t1 = vh.synthetic_t1()
+    for n, peak in enumerate((LEFT, RIGHT)):
+        skull, water, _, _ = _steps_fields(t1, peak)
+        h.UpdateNiftiAcResults(skull, water, n)
+    viewer_screenshots.add_window(window, "Step 2 per trajectory")
+    for viewer, peak in zip(window.viewer, (LEFT, RIGHT)):
+        data = vh.layer_data(viewer, 'Skull')
+        assert np.unravel_index(np.argmax(data), data.shape) == peak
+
+    merged = nibabel.Nifti1Image(np.maximum(vh.gaussian_field(t1, LEFT).get_fdata(),
+                                            vh.gaussian_field(t1, RIGHT).get_fdata()).astype(np.float32), t1.affine)
+    h.UpdateNiftiMergedAcResults(merged)
+    viewer_screenshots.add_window(window, "Step 2 Combine Trajectories (merged field, per trajectory fields hidden)")
+    for viewer in window.viewer:
+        assert _layers(viewer)[-1] == 'MergedAc'
+        assert _visible(viewer, 'MergedAc') and not _visible(viewer, 'Skull')
+        np.testing.assert_allclose(vh.layer_data(viewer, 'MergedAc'), merged.get_fdata())

@@ -329,6 +329,12 @@ def get_pyvista_plot():
     """3D mesh and voxel plots by name, each returning camera orbit frames (see helpers/plots.py)."""
     return plots.MESH_PLOTS
 
+@pytest.fixture
+def viewer_screenshots(request, tmp_path):
+    """Screenshots of VTK viewers for this test's html report entry (see helpers/vtk_viewer_helpers.py)."""
+    from Tests.helpers.vtk_viewer_helpers import ViewerScreenshots
+    return ViewerScreenshots(request, tmp_path / 'viewer_screenshots')
+
 
 @pytest.fixture()
 def get_extra_scan_file():

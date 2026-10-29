@@ -10,6 +10,8 @@ The viewer only needs small synthetic volumes, so these tests use no GPU or test
   * NiftiViewer              (base/overlay loading, navigation, coordinate conversion, layer
                               controls, overlay removal, window/level reset, screenshots)
   * NiftiViewerWindow        (one tab and viewer per trajectory, closed signal)
+  * synthetic head           (the synthetic dataset's tissue mask, T1W and CT rendered in every view
+                              mode through the viewer tab's toolbar; screenshots go to the report)
 """
 import nibabel
 import numpy as np
@@ -420,3 +422,234 @@ def test_window_emits_closed(qtbot, nv):
     window.show()
     with qtbot.waitSignal(window.closed, timeout=2000):
         window.close()
+
+
+# ================================================================================================================================
+# SYNTHETIC HEAD (rendered views, screenshots in the report)
+# ================================================================================================================================
+@pytest.fixture
+def head_tab(qtbot):
+    """Viewer tab (toolbar + viewer) showing the synthetic head's Step 1 mask with its T1W overlay,
+    set up the way BabelBrain's _UpdateVTKDomain does (tissue colours, T1W at 50 % opacity)."""
+    from GUIComponents.nifti_viewer import NiftiViewerTab
+    from Tests.helpers import vtk_viewer_helpers as vh
+
+    tab = NiftiViewerTab()
+    qtbot.addWidget(tab)
+    tab.resize(1400, 520)
+    tab.show()
+    viewer = tab.viewer
+    viewer.load_base(vh.synthetic_mask(), np.array(vh.SYNTHETIC_TARGET), 'Tissue Type', tissue_label=True)
+    viewer.add_overlay(vh.synthetic_t1(), 'T1W', use_percentile=True, id='T1W')
+    viewer._on_cmap_changed(0, 'TissueLabel')
+    viewer._layer_panel._rows[1]._opacity_slider.setValue(50)
+    qtbot.wait(50)
+    return tab
+
+
+def _target_ras():
+    from Tests.helpers import vtk_viewer_helpers as vh
+    return nibabel.affines.apply_affine(vh.synthetic_t1().affine, vh.SYNTHETIC_TARGET)
+
+
+def _thirds(pixels):
+    """The three viewports of a viewport screenshot."""
+    w = pixels.shape[1] // 3
+    return [pixels[:, i * w:(i + 1) * w] for i in range(3)]
+
+
+def _count(pixels, rgb, tol=40):
+    return int((np.abs(pixels.astype(int) - np.array(rgb)).max(axis=-1) <= tol).sum())
+
+
+@pytest.mark.parametrize('mode,neurological', [('affine', False), ('medical', False), ('medical', True)],
+                         ids=['affine', 'medical-radiological', 'medical-neurological'])
+def test_head_views(qtbot, head_tab, viewer_screenshots, mode, neurological):
+    """Every view mode of the toolbar opens on the focal point with the crosshair on it, and draws
+    the head in all three viewports."""
+    viewer = head_tab.viewer
+    if mode == 'medical':
+        head_tab._rb_medical.click()
+        head_tab._cb_radio.setChecked(neurological)
+    qtbot.wait(50)
+    assert viewer._mode == mode and viewer._neurogical == neurological
+
+    np.testing.assert_allclose(viewer.get_current_ras(), _target_ras(), atol=1e-6)
+    for vp in viewer._vps:
+        assert vp._cross_h.GetVisibility() and vp._cross_v.GetVisibility()
+        np.testing.assert_allclose(np.dot(_crosshair(vp) - _target_ras(), vp._pg.right), 0, atol=1e-6)
+    # The RAS boxes follow the crosshair
+    np.testing.assert_allclose([float(e.text()) for e in head_tab._ras_edits], _target_ras(), atol=0.01)
+
+    pixels = viewer_screenshots.add(viewer, f"Synthetic head, {mode} mode"
+                                    f"{' (neurological)' if neurological else ''}, focal point at the crosshair")
+    for view in _thirds(pixels):
+        assert view.std() > 20, "viewport is blank"
+
+
+def _crosshair(vp):
+    from Tests.helpers import vtk_viewer_helpers as vh
+    return vh.crosshair_centre(vp)
+
+
+def _crosshair_column(view, axis=0):
+    """Pixel column (axis=0) or row (axis=1) of a viewport's crosshair line (nifti_viewer.ACCENT)."""
+    hits = (np.abs(view.astype(int) - np.array((0, 200, 255))).max(axis=-1) <= 60).mean(axis=axis)
+    return int(np.argmax(hits))
+
+
+def test_head_neurological_mirrors_axial_and_coronal(qtbot, head_tab, viewer_screenshots):
+    """The neurological convention mirrors the axial and coronal views left-right (crosshair and
+    R/L labels swap sides), and leaves the sagittal view as it is."""
+    viewer = head_tab.viewer
+    head_tab._rb_medical.click()
+    radiological = _thirds(viewer_screenshots.add(viewer, "Medical mode, radiological"))
+    labels_rad = [[a.GetInput() for a in vp._orient_actors] for vp in viewer._vps]
+    head_tab._cb_radio.setChecked(True)
+    neurological = _thirds(viewer_screenshots.add(viewer, "Medical mode, neurological (axial and coronal mirrored)"))
+    labels_neu = [[a.GetInput() for a in vp._orient_actors] for vp in viewer._vps]
+
+    assert labels_rad[:2] == [['R', 'L', 'A', 'P'], ['R', 'L', 'S', 'I']]
+    assert labels_neu[:2] == [['L', 'R', 'A', 'P'], ['L', 'R', 'S', 'I']]
+    assert labels_rad[2] == labels_neu[2] == ['A', 'P', 'S', 'I']
+    # The target is 0.5 mm right of the head centre, so its crosshair isn't on the middle column
+    for n, (rad, neu) in enumerate(zip(radiological, neurological)):
+        width = rad.shape[1]
+        col_rad, col_neu = _crosshair_column(rad), _crosshair_column(neu)
+        if n < 2:
+            assert abs(col_rad - (width / 2)) > 3
+            assert abs((width - 1 - col_rad) - col_neu) <= 3, f"view {n} not mirrored"
+        else:
+            assert col_rad == col_neu
+
+
+@pytest.mark.xfail(strict=True, reason="the tissue label look-up table (labels 0-8) is applied over the mask's "
+                                       "data range (0-5 without brain segmentation), so label n shows the colour "
+                                       "of label 8n/5, and linear interpolation blends labels at their borders")
+def test_head_tissue_colours(qtbot, head_tab, viewer_screenshots):
+    """Each tissue label of the Step 1 mask shows its colour (nifti_viewer._TISSUE_RGBA): scalp,
+    cortical and trabecular bone, brain, and the focal point voxel at the crosshair."""
+    from GUIComponents.nifti_viewer import _TISSUE_RGBA
+    from Tests.helpers import vtk_viewer_helpers as vh
+
+    viewer = head_tab.viewer
+    viewer._layer_panel._rows[1]._eye_btn.setChecked(False)
+    head_tab._cb_crosshair.setChecked(False)
+    pixels = viewer_screenshots.add(viewer, "Tissue mask only: expected scalp blue, cortical bone light blue, "
+                                    "trabecular bone cyan, brain green and the focal point yellow")
+    target = _target_ras()
+    problems = []
+    for n, vp in enumerate(viewer._vps):
+        # The head centre (the origin, in the brain) moved onto this viewport's slice through the target
+        centre = np.dot(target, vp._pg.normal) * vp._pg.normal
+        for name, world, label, tol in [('brain', centre, 4, 20), ('focal point', target, 5, 40)]:
+            row, col = vh.screenshot_pixel(viewer, n, world)
+            colour = pixels[row - 2:row + 3, col - 2:col + 3].reshape(-1, 3).mean(axis=0)
+            if np.abs(colour - _TISSUE_RGBA[label][:3]).max() > tol:
+                problems.append(f"view {n}: {name} shown as {np.round(colour).astype(int).tolist()}")
+    # Labels the mask doesn't have (white and grey matter, CSF) must not show up
+    for label in (6, 7, 8):
+        share = _count(pixels, _TISSUE_RGBA[label][:3], tol=12) / pixels[..., 0].size
+        if share > 1e-3:
+            problems.append(f"colour of label {label}, not in the mask, covers {share:.1%} of the views")
+    assert not problems, '; '.join(problems)
+
+
+def test_head_layers_change_rendering(qtbot, head_tab, viewer_screenshots):
+    """Turning the T1W layer off changes the views (the mask is then drawn alone)."""
+    viewer = head_tab.viewer
+    with_t1 = viewer_screenshots.add(viewer, "Tissue mask with T1W at 50 %")
+    viewer._layer_panel._rows[1]._eye_btn.setChecked(False)
+    mask_only = viewer_screenshots.add(viewer, "Tissue mask only (T1W hidden)")
+    assert np.abs(with_t1.astype(int) - mask_only.astype(int)).mean() > 1
+
+
+def test_head_overlays_ct_and_field(qtbot, head_tab, viewer_screenshots):
+    """CT (bone only through its cutoff) and a Step 2 like field (Jet, cutoff 0.25) drawn over the head."""
+    from Tests.helpers import vtk_viewer_helpers as vh
+
+    viewer = head_tab.viewer
+    before = viewer_screenshots.add(viewer, "Before overlays")
+    indices, unique_hu = vh.synthetic_ct_indices()
+    ct = nibabel.Nifti1Image(unique_hu[np.asarray(indices.dataobj)], indices.affine)
+    viewer.add_overlay(ct, 'CT', id='CT')
+    row = viewer._layer_panel._rows[-1]
+    row._cutoff_edit.setText('1')
+    row._on_cutoff_changed()
+    field = vh.gaussian_field(vh.synthetic_t1(), vh.SYNTHETIC_TARGET)
+    viewer.add_overlay(field, 'Skull', id='Skull')
+    row = viewer._layer_panel._rows[-1]
+    row._cmap_combo.setCurrentText('Jet')
+    row._cutoff_edit.setText('0.25')
+    row._on_cutoff_changed()
+    after = viewer_screenshots.add(viewer, "CT (cutoff 1 HU) and a field at the focal point (Jet, cutoff 0.25)")
+
+    assert vh.layer_ids(viewer) == ['', 'T1W', 'CT', 'Skull']
+    assert vh.layer(viewer, 'CT').cutoff == 1.0 and vh.layer(viewer, 'Skull').cutoff == 0.25
+    # The field only covers the focal region: views change, but most pixels don't
+    changed = np.abs(before.astype(int) - after.astype(int)).max(axis=-1) > 30
+    assert 0.001 < changed.mean() < 0.5
+
+
+def test_head_crosshair_checkbox_and_reset(qtbot, head_tab, viewer_screenshots):
+    viewer = head_tab.viewer
+    head_tab._cb_crosshair.setChecked(False)
+    hidden = viewer_screenshots.add(viewer, "Crosshairs off")
+    assert not any(vp._cross_h.GetVisibility() for vp in viewer._vps)
+    head_tab._cb_crosshair.setChecked(True)
+
+    # A voxel centre of the synthetic head (its grid is at -19.5 + i mm)
+    for edit, value in zip(head_tab._ras_edits, (-5.5, 3.5, 8.5)):
+        edit.setText(str(value))
+    head_tab._on_ras_entered()
+    np.testing.assert_allclose(viewer.get_current_ras(), (-5.5, 3.5, 8.5), atol=1e-6)
+    moved = viewer_screenshots.add(viewer, "Navigated to RAS (-5.5, 3.5, 8.5) from the toolbar")
+    assert np.abs(hidden.astype(int) - moved.astype(int)).mean() > 0
+
+    head_tab._btn_reset.click()
+    np.testing.assert_allclose(viewer.get_current_ras(), _target_ras(), atol=1e-6)
+
+
+def test_head_screenshot_button(qtbot, head_tab, monkeypatch, tmp_path, viewer_screenshots):
+    """The toolbar's Screenshot button saves the three views and colour bar as a PNG."""
+    import GUIComponents.nifti_viewer as nv_module
+    from PIL import Image
+
+    assert head_tab._btn_screenshot.isEnabled()
+    target = tmp_path / 'saved'
+    monkeypatch.setattr(nv_module.QFileDialog, 'getSaveFileName', lambda *a, **k: (str(target), 'PNG'))
+    head_tab._btn_screenshot.click()
+    saved = target.with_suffix('.png')
+    assert saved.is_file()
+    reference = viewer_screenshots.add(head_tab.viewer, "Same views as the saved screenshot")
+    image = np.asarray(Image.open(saved).convert('RGB'))
+    np.testing.assert_array_equal(image[:, :reference.shape[1]], reference)
+
+
+def test_crosshair_drawn_when_target_on_middle_slices(qtbot, nv):
+    """A target on the slices the viewports open on (the middle ones) still gets its crosshair: no
+    slider changes, so load_base draws it itself."""
+    from Tests.helpers import vtk_viewer_helpers as vh
+
+    widget = nv.NiftiViewer()
+    qtbot.addWidget(widget)
+    widget.resize(900, 300)
+    widget.show()
+    middle = np.array(vh.synthetic_t1().shape) // 2
+    widget.load_base(vh.synthetic_mask(middle), middle, 'Tissue Type', tissue_label=True)
+    target = nibabel.affines.apply_affine(vh.synthetic_t1().affine, middle)
+    for vp in widget._vps:
+        assert vp._cross_h.GetVisibility()
+        np.testing.assert_allclose(np.dot(vh.crosshair_centre(vp) - target, vp._pg.normal), 0, atol=1e-6)
+    np.testing.assert_allclose(widget.get_current_ras(), target, atol=1e-6)
+
+
+@pytest.mark.parametrize('extent', [(10.0, 20.0, 30.0), (10.5, 20.25, 29.7)], ids=['whole-mm', 'partial-mm'])
+def test_medical_grid_centre_on_slice_grid(nv, extent):
+    """The medical planes' centre is the middle of their slice grid (ras_min + i * iso), also when
+    an extent isn't a whole number of iso steps, so slice i of a viewport is at ras_min + i * iso."""
+    ras_min = np.array([-5.0, -10.0, -15.0])
+    ras_max = ras_min + np.array(extent)
+    for g in nv.medical_plane_geoms(ras_min, ras_max, 1.0, False):
+        axis = int(np.argmax(np.abs(g.normal)))
+        assert np.dot(g.centre, g.normal) == pytest.approx(ras_min[axis] + (g.n - 1) / 2)
