@@ -1045,7 +1045,7 @@ Major releases should exercise the main supported workflows across representativ
         </ul>
         <b>Transducer/Frequency/Trajectory:</b>
         <ul>
-          <li>Single/500kHz/Superficial Target (left)</li>
+          <li>CTX_500/500kHz/Superficial Target (left)</li>
         </ul>
       </td>
       <td>
@@ -1059,10 +1059,44 @@ Major releases should exercise the main supported workflows across representativ
     <!-- e2e_test_custom_tx_full_pipeline -->
     <tr>
       <td>e2e_test_custom_tx_full_pipeline</td>
-      <td>&lt;parameter_combination&gt;</td>
+      <td>
+        <b>Computing backend:</b><br>
+        <ul>
+          <li>CUDA</li>
+          <li>OpenCL</li>
+          <li>Metal</li>
+        </ul>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>ernie</li>
+        </ul>
+        <b>CT Type:</b><br>
+        <ul>
+          <li>NONE</li>
+        </ul>
+        <b>Thermal Profile:</b><br>
+        <ul>
+          <li>pytest_thermal_profile_1</li>
+        </ul>
+        <b>Custom Tx template → built-in Transducer/Frequency:</b>
+        <ul>
+          <li>simple_focused → Single/500kHz</li>
+          <li>flat_annular_array → H246/500kHz</li>
+          <li>focused_annular_array → CTX_500/500kHz</li>
+          <li>flat_array_2D → TheraPhas/490kHz</li>
+          <li>focused_array → H317/250kHz</li>
+        </ul>
+        <b>Trajectory:</b>
+        <ul>
+          <li>Superficial Target (left), Slicer</li>
+        </ul>
+      </td>
       <td>
         <ul>
-          <li>Test custom tx feature for each transducer geometry against same release corresponding tx</li>
+          <li>Tests the custom transducer feature: a custom transducer is created from each template in custom_tx_templates/ and its full pipeline outputs are compared with the built-in transducer it replicates (CUSTOM_TX_EQUIVALENTS)</li>
+          <li>Slicer trajectories for every pair, so TheraPhas isn't flipped and compares 1 to 1 with its custom version</li>
+          <li>Both runs are saved in &lt;gen_output_folder&gt;/e2e_custom_tx_full_pipeline/ and reused on the same BabelBrain commit</li>
+          <li>15 total tests (5 templates × 3 backends)</li>
         </ul>
       </td>
     </tr>
@@ -1100,7 +1134,7 @@ Major releases should exercise the main supported workflows across representativ
       <td>
         <ul>
           <li>Tests multipoint focusing on the quick configuration (QUICK_SIM_PARAMS), so it runs much faster than the intensive sim</li>
-          <li>Multipoint profiles only work with phased arrays (transducers with steering), so it uses H317 at its lowest frequency instead of the quick configuration's single element transducer</li>
+          <li>Multipoint profiles only work with phased arrays (transducers with steering), so it uses H317 at its lowest frequency instead of the quick configuration's CTX_500 (an annular array, which can only steer along its axis)</li>
           <li>Only checks that the run completes and writes thermal outputs, so it doesn't need reference outputs</li>
           <li>3 total tests</li>
         </ul>
@@ -1130,7 +1164,7 @@ Major releases should exercise the main supported workflows across representativ
         </ul>
         <b>Transducer/Frequency/Trajectory:</b>
         <ul>
-          <li>Single/500kHz/Superficial Targets (combined left and right)</li>
+          <li>CTX_500/500kHz/Superficial Targets (combined left and right)</li>
         </ul>
       </td>
       <td>

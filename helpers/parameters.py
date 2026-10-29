@@ -261,8 +261,8 @@ BASIC_PARAMS = {
     'require_ct_files': True,
 }
 
-# Quick configuration: a cheap full pipeline (ernie, MRI only, superficial target, one single
-# element transducer), the base for E2E cases that check a single feature. Fields as in
+# Quick configuration: a cheap full pipeline (ernie, MRI only, superficial target, CTX_500
+# at 500 kHz), the base for E2E cases that check a single feature. Fields as in
 # REGRESSION_CASES.
 QUICK_SIM_PARAMS = {
     'dataset': 'ernie',
@@ -279,7 +279,7 @@ QUICK_SIM_PARAMS = {
 }
 
 # Multipoint focusing on the quick configuration. MultiPoint profiles only work with phased arrays
-# (transducers with steering), so it uses H317 at its lowest frequency instead of Single.
+# (transducers with steering), so it uses H317 at its lowest frequency instead of CTX_500.
 # Run as e2e_test_multipoint_full_pipeline.
 MULTIPOINT_SIM_PARAMS = {
     **QUICK_SIM_PARAMS,
