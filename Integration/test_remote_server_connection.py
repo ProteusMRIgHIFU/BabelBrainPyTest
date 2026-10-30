@@ -85,7 +85,9 @@ def server_module():
 
 @pytest.fixture(scope='module')
 def certs(tmp_path_factory):
-    return make_certificates(tmp_path_factory.mktemp('certs'))
+    folder = tmp_path_factory.mktemp('certs')
+    logging.info(f"Making the test CA, server, client and rogue certificates with openssl in {folder}")
+    return make_certificates(folder)
 
 
 def _needs_tls(server_name, record):
@@ -126,6 +128,7 @@ def start_server(server_module, tmp_path, request):
 
     yield _start
     for httpd in running:
+        logging.info(f"Stopping the server on 127.0.0.1:{httpd.server_address[1]}")
         httpd.shutdown()
         httpd.server_close()
 
@@ -163,19 +166,23 @@ def test_connection_check(start_server, request, case, server_name, fields, conn
     """RemoteServers.test_connection, as run when a server is added in BabelBrain's GUI."""
     import RemoteServers
 
+    logging.info(f"Case {case}: client should {'connect to' if connects else 'be refused by'} the '{server_name}' server")
     if _needs_tls(server_name, fields):
         request.getfixturevalue('certs')
     port, _ = start_server(server_name)
     record = _client_record(fields, port, request)
+    logging.info("Running RemoteServers.test_connection, as when a server is added in the GUI")
     ok, info = RemoteServers.test_connection(record, timeout=5)
     logging.info(f"test_connection -> ok={ok}: {info}")
 
     assert ok is connects, f"Expected {'a connection' if connects else 'a refusal'}, got: {info}"
     if connects:
+        logging.info("Checking the server is healthy and reports the TLS / mutual TLS it runs with")
         assert info['health']['status'] == 'ok'
         assert info['capabilities']['tls'] is (SERVERS[server_name]['cert'] is not None)
         assert info['capabilities']['mutual_tls'] is ('client_ca' in SERVERS[server_name])
     elif error:
+        logging.info(f"Checking the refusal message mentions {error!r}")
         assert error in info
 
 
@@ -183,6 +190,7 @@ def test_connection_check(start_server, request, case, server_name, fields, conn
 def test_workspace_upload(start_server, request, cf, tmp_path, case, server_name, fields, connects, error):
     """client_functions moves data over the connection: create a workspace, upload a file into a
     sub folder, list it, then delete the workspace (as the remote pipeline stages its inputs)."""
+    logging.info(f"Case {case}: staging a file on the '{server_name}' server through client_functions")
     port, workspaces = start_server(server_name)
     cf.bind_server(_client_record(fields, port, request))
     payload = os.urandom(256 * 1024)
@@ -193,12 +201,14 @@ def test_workspace_upload(start_server, request, cf, tmp_path, case, server_name
     logging.info(f"Created workspace {ws['workspace_id']} at {ws['root']}")
     server_path = cf.upload(ws['workspace_id'], str(local), 'm2m_pytest/T1W.nii.gz')
     logging.info(f"Uploaded {len(payload)} bytes to {server_path}")
+    logging.info("Checking the workspace lists the file, its content is intact and it stays inside the workspace")
     listing = cf._req('GET', f"/workspaces/{ws['workspace_id']}")
     assert listing['files'] == [os.path.join('m2m_pytest', 'T1W.nii.gz')]
     with open(server_path, 'rb') as f:
         assert f.read() == payload, "Uploaded file differs from the local one"
     assert os.path.commonpath([server_path, str(workspaces)]) == str(workspaces)
 
+    logging.info(f"Deleting workspace {ws['workspace_id']} and checking its folder is gone")
     assert cf.delete_workspace(ws['workspace_id'])['deleted']
     assert not os.path.exists(ws['root'])
 
@@ -212,10 +222,12 @@ def test_upload_cannot_leave_workspace(start_server, request, cf, tmp_path, name
     local = tmp_path / 'payload.bin'
     local.write_bytes(b'not allowed')
     ws = cf.create_workspace()
+    logging.info(f"Uploading into workspace {ws['workspace_id']} as {name!r}, which climbs out of it")
     with pytest.raises(urllib.error.HTTPError) as refused:
         cf.upload(ws['workspace_id'], str(local), name)
     logging.info(f"Upload as {name!r} -> HTTP {refused.value.code}")
     assert refused.value.code == 400
+    logging.info("Checking no outside.bin was written anywhere under the workspaces folder")
     written = [os.path.join(root, f) for root, _, files in os.walk(workspaces.parent) for f in files
                if f == 'outside.bin']
     assert not written, f"Upload escaped the workspace: {written}"
@@ -229,7 +241,9 @@ def test_requests_without_valid_token_are_refused(start_server, request, cf, fie
     """Every endpoint but /healthz needs the token, including the ones the pipeline uses."""
     port, _ = start_server('http_token')
     cf.bind_server(_client_record(fields, port, request))
+    logging.info("Checking /healthz answers without a token")
     assert cf._req('GET', '/healthz', retries=1)['status'] == 'ok'
+    logging.info("Checking every other endpoint refuses the request with HTTP 401")
     for method, path, body in [('GET', '/capabilities', None), ('GET', '/workspaces', None),
                                ('POST', '/workspaces', {'mode': 'temp'}), ('POST', '/jobs', {'config': {}})]:
         with pytest.raises(expected) as refused:
@@ -243,7 +257,9 @@ def test_mutual_tls_rejects_client_without_certificate_at_handshake(start_server
     request.getfixturevalue('certs')
     port, _ = start_server('mutual_tls')
     cf.bind_server(_client_record({'https': True, 'cafile': 'ca', 'token': TOKEN}, port, request))
+    logging.info("Requesting /capabilities with the token but no client certificate")
     with pytest.raises((urllib.error.URLError, ConnectionError, OSError)) as refused:
         cf._req('GET', '/capabilities', retries=1)
     logging.info(f"Refused at the TLS handshake: {refused.value!r}")
+    # An HTTPError would mean the request got through TLS and was refused by the handler instead
     assert not isinstance(refused.value, urllib.error.HTTPError)

@@ -125,6 +125,8 @@ def remote_server(tmp_path_factory):
         mp.setattr(RemoteServers, 'CONFIG_DIR', str(servers_dir))
         mp.setattr(RemoteServers, 'SERVERS_FILE', str(servers_dir / 'servers.json'))
         RemoteServers.save_servers([server])
+        logging.info(f"Registered '{server['name']}' in {servers_dir / 'servers.json'}, waiting up to "
+                     f"{SERVER_START_TIMEOUT_S} s for it to answer")
 
         deadline = time.time() + SERVER_START_TIMEOUT_S
         ok, info = RemoteServers.test_connection(server)
@@ -163,6 +165,7 @@ def custom_tx_root(tmp_path_factory):
     from CreateTransducers import transducer_creator
 
     root = tmp_path_factory.mktemp('custom_transducers')
+    logging.info(f"Custom transducers for this module are written to {root}")
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv('BABEL_CUSTOM_TX_ROOT', str(root))
         # CustomTransducer writes to its own module constant rather than custom_transducers_root()
@@ -222,8 +225,12 @@ def _replace_yaml_name(template_text, new_name):
 @pytest.mark.parametrize('case', REMOTE_CASES)
 def test_e2e_remote_full_pipeline(pipeline, remote_server, case):
     output_dir = pipeline.work_dir / case.case_id
+    logging.info(f"Running {case.case_id} (steps 1 to {case.last_step}) on remote server "
+                 f"'{remote_server['name']}' at {remote_server['host']}:{remote_server['port']}")
     bb = pipeline.run(case, output_dir, remote_server_name=remote_server['name'])
 
+    # ComputingBackend 5 is the remote server entry of the computing engine list
+    logging.info("Checking the remote server was the computing engine and thermal outputs came back")
     assert bb.Config['ComputingBackend'] == 5, "Remote server was not selected as the computing engine"
     outputs = thermal_outputs(output_dir)
     logging.info(f"Remote run returned {len(outputs)} thermal output(s) to {output_dir}")
@@ -247,13 +254,18 @@ def _custom_tx_case_outputs(pipeline, custom_tx_root, case):
 @pytest.mark.generate_outputs
 @pytest.mark.parametrize('case', CUSTOM_TX_CASES)
 def test_generate_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
+    logging.info(f"Generating outputs for {case.case_id}: custom {case.custom_tx_template} template vs "
+                 f"built-in {case.transducer} on {case.backend}")
     _custom_tx_case_outputs(pipeline, custom_tx_root, case)
 
 
 @requires_feature('custom_transducers')
 @pytest.mark.parametrize('case', CUSTOM_TX_CASES)
 def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
+    logging.info(f"Case {case.case_id}: custom {case.custom_tx_template} template vs built-in "
+                 f"{case.transducer} at {case.freq_khz} kHz on {case.backend}")
     builtin_dir, custom_dir = _custom_tx_case_outputs(pipeline, custom_tx_root, case)
+    logging.info("Checking the custom transducer's thermal outputs match the built-in ones exactly")
     # TxSystem holds the transducer's name, which differs between the custom and built-in transducer
     pipeline.assert_thermal_outputs_match(
         builtin_dir, custom_dir,
@@ -263,6 +275,7 @@ def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
 
 @pytest.mark.parametrize('case', MULTIPOINT_CASES)
 def test_e2e_multipoint_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: full pipeline with multipoint profile {case.multipoint_profile}")
     output_dir = pipeline.ensure_outputs(MULTIPOINT_SUITE, case)
     outputs = thermal_outputs(output_dir)
     logging.info(f"Multipoint run ({case.multipoint_profile}) has {len(outputs)} thermal output(s) in {output_dir}")
@@ -271,7 +284,9 @@ def test_e2e_multipoint_full_pipeline(pipeline, case):
 
 @pytest.mark.parametrize('case', COMBINED_TRAJECTORIES_CASES)
 def test_e2e_combined_trajectories_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: two targets in one trajectory file, merged with Combine Trajectories")
     output_dir = pipeline.ensure_outputs(COMBINED_TRAJECTORIES_SUITE, case)
+    logging.info("Checking the merged acoustic field, merged thermal output and per trajectory thermal outputs")
 
     # Combined outputs are named <ID 1>+<ID 2>_<transducer>_..._Merged_*
     merged_acoustic = glob.glob(os.path.join(str(output_dir), '**', '*+*Merged_NORM.nii.gz'), recursive=True)
@@ -305,20 +320,24 @@ def _assert_layer_matches(viewer, layer_id, nifti):
 @requires_feature('vtk_viewer')
 @pytest.mark.parametrize('case', VTK_VISUALIZATION_CASES)
 def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case, viewer_screenshots):
+    logging.info(f"Case {case.case_id}: VTK viewer opened after step 1 and kept open through step 3")
     rh.auto_answer_dialogs(monkeypatch)
     bb = rh.build_babelbrain(qtbot, case, tmp_path / case.case_id)
     gui = viewer_screenshots.entries  # GUI screenshots after each step go next to the viewer's
 
     # Step 1, then open the viewer
+    logging.info("Checking the VTK viewer button is disabled before step 1")
     assert not bb.Widget.vtkVisualizationqPushButton.isEnabled()
     _run_step(1, qtbot, bb, gui)
     assert bb.Widget.vtkVisualizationqPushButton.isEnabled()
+    logging.info("Opening the VTK viewer")
     bb.Widget.vtkVisualizationqPushButton.click()
     window = bb._vtk_visualization
     qtbot.addWidget(window)
     viewer = window.viewer[0]
     viewer_screenshots.add(viewer, f"Step 1: {case.case_id}")
 
+    logging.info("Checking the viewer shows the step 1 mask and T1W, with the sliders on the focal point")
     assert window.tabs.tabText(0) == bb.Config['ID'][0]
     assert vh.layer_ids(viewer) == ['', 'T1W']
     _assert_layer_matches(viewer, '', bb._MaskNib[0])
@@ -329,6 +348,7 @@ def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case,
     # Step 2 with the viewer open
     _run_step(2, qtbot, bb, gui)
     viewer_screenshots.add(viewer, "Step 2: skull pressure (Jet, cutoff 0.25), water field hidden")
+    logging.info("Checking the Skull and Water layers match step 2's fields, only Skull shown (cutoff 0.25)")
     assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water']
     _assert_layer_matches(viewer, 'Skull', bb._NiftiSkull[0])
     _assert_layer_matches(viewer, 'Water', bb._NiftiWater[0])
@@ -342,6 +362,7 @@ def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case,
     # Step 3 with the viewer open
     _run_step(3, qtbot, bb, gui)
     viewer_screenshots.add(viewer, "Step 3: intensity (cutoff 0.1), temperature and Step 2 fields hidden")
+    logging.info("Checking the Intensity and Temperature layers match step 3's maps, only Intensity shown")
     assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water', 'Intensity', 'Temperature']
     _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
     _assert_layer_matches(viewer, 'Temperature', bb._NiftiTemperature[0])
@@ -351,6 +372,7 @@ def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case,
 
     # Closing and reopening rebuilds the viewer with every result
     shown = {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)}
+    logging.info(f"Closing and reopening the viewer (layers shown: {[i for i, v in shown.items() if v]})")
     window.close()
     assert not hasattr(bb, '_vtk_visualization')
     bb.Widget.vtkVisualizationqPushButton.click()
@@ -358,6 +380,7 @@ def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case,
     qtbot.addWidget(window)
     viewer = window.viewer[0]
     viewer_screenshots.add(viewer, "Reopened after Step 3")
+    logging.info("Checking the reopened viewer has every layer with the same visibility and data")
     assert {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)} == shown
     _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
     window.close()

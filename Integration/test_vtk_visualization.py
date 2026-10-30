@@ -110,6 +110,7 @@ class _Harness:
     def __init__(self, qtbot, tmp_path, ids):
         from PySide6.QtWidgets import QPushButton, QTabWidget
 
+        logging.info(f"Creating a BabelBrain harness for trajectories {list(ids)} (Step 2 tab and clock stubbed)")
         self._qtbot = qtbot
         self._tmp_path = tmp_path
         self.Config = {'ID': list(ids), 'bUseCT': False, 'bExtractAirRegions': False}
@@ -181,6 +182,7 @@ class _Harness:
 def harness_factory(qtbot, tmp_path):
     from BabelBrain.BabelBrain import BabelBrain
 
+    logging.info(f"Borrowing BabelBrain's {len(VTK_METHODS)} VTK visualization methods for the harness")
     for name in VTK_METHODS:
         method = getattr(BabelBrain, name)
         setattr(_Harness, name, _logged(name, method) if name in LOGGED_METHODS else method)
@@ -194,6 +196,7 @@ def harness_factory(qtbot, tmp_path):
     yield _make
     for harness in created:
         if harness.viewer_open:
+            logging.info("Closing the viewer window left open by the test")
             harness._vtk_visualization.close()
 
 
@@ -210,30 +213,37 @@ def harness(harness_factory):
 # ================================================================================================================================
 def test_viewer_button_enabled_after_last_trajectory(harness_factory):
     h = harness_factory(['left', 'right'])
+    logging.info("Disabling the VTK visualization button and finishing Step 1 on the first trajectory only")
     h.Widget.vtkVisualizationqPushButton.setEnabled(False)
     h._reset_results(2)
     nibabel.save(_mask((10, 10, 10)), h._outnameMask[0])
     nibabel.save(_field((10, 10, 10)), h._T1W_resampled_fname[0])
     h._TrajectoryNumber = 0
     h.UpdateMask()
+    logging.info("Checking the button is still disabled with a trajectory left")
     assert not h.Widget.vtkVisualizationqPushButton.isEnabled()
     h.run_step1([(10, 10, 10), (14, 18, 20)])
+    logging.info("Checking the button is enabled once the last trajectory finished")
     assert h.Widget.vtkVisualizationqPushButton.isEnabled()
 
 
 def test_open_viewer_shows_step1_domain(harness):
     window = harness.open_viewer()
     viewer = window.viewer[0]
+    logging.info("Checking the Step 1 domain: tissue colours base, T1W overlay at 50 %")
     assert _layers(viewer) == ['', 'T1W']
     assert viewer._volumes[0].cmap == 'TissueLabel'
     assert viewer._volumes[1].opacity == pytest.approx(0.5)
+    logging.info("Checking the viewer opens on the focal point voxel (12, 14, 16)")
     # Opens on the focal point voxel (label 5 of the mask)
     assert [vp._slider.value() for vp in viewer._vps] == [14, 12, 16]
 
 
 def test_open_viewer_twice_reuses_window(harness):
     window = harness.open_viewer()
+    logging.info("Clicking VTK visualization again with the window open")
     harness.OpenVTKVisualization()
+    logging.info("Checking the same window is reused, without duplicate layers")
     assert harness._vtk_visualization is window
     assert _layers(window.viewer[0]) == ['', 'T1W']
 
@@ -242,6 +252,7 @@ def test_one_tab_per_trajectory_at_its_own_target(harness_factory):
     h = harness_factory(['left', 'right'])
     h.run_step1([(8, 10, 12), (16, 18, 20)])
     window = h.open_viewer()
+    logging.info("Checking there is one tab per trajectory, each on its own focal point")
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == ['left', 'right']
     assert [vp._slider.value() for vp in window.viewer[0]._vps] == [10, 8, 12]
     assert [vp._slider.value() for vp in window.viewer[1]._vps] == [18, 16, 20]
@@ -251,12 +262,15 @@ def test_step2_results_added_and_replaced(harness):
     window = harness.open_viewer()
     viewer = window.viewer[0]
     harness.UpdateNiftiAcResults(_field((12, 14, 16)), _field((12, 14, 18)), 0)
+    logging.info("Checking Skull and Water are added, Skull shown with a 0.25 cutoff, Water hidden")
     assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water']
     assert _visible(viewer, 'Skull') and not _visible(viewer, 'Water')
     assert viewer._volumes[2].cutoff == 0.25
 
+    logging.info("Rerunning Step 2 with shifted fields")
     # Rerunning Step 2 replaces the previous fields instead of stacking new ones
     harness.UpdateNiftiAcResults(_field((12, 14, 17)), _field((12, 14, 19)), 0)
+    logging.info("Checking the fields were replaced, not added again")
     assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water']
     assert all(len(vp._layers) == 4 for vp in viewer._vps)
 
@@ -266,11 +280,14 @@ def test_step3_results_hide_step2_fields(harness):
     viewer = window.viewer[0]
     harness.UpdateNiftiAcResults(_field((12, 14, 16)), _field((12, 14, 18)), 0)
     harness.UpdateNiftiTemperatureResults(_field((12, 14, 16)), _image(37 + 2 * _field((12, 14, 16)).get_fdata()), 0)
+    logging.info("Checking Step 3 adds Intensity (shown) and Temperature (hidden, cutoff 37.05) and hides Step 2 fields")
     assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water', 'Intensity', 'Temperature']
     assert not _visible(viewer, 'Skull') and not _visible(viewer, 'Water')
     assert _visible(viewer, 'Intensity') and not _visible(viewer, 'Temperature')
+    # 37.05: just above body temperature, so only heating shows
     assert viewer._volumes[_layers(viewer).index('Temperature')].cutoff == 37.05
 
+    logging.info("Rerunning Step 3, checking Intensity and Temperature are replaced, not duplicated")
     harness.UpdateNiftiTemperatureResults(_field((12, 14, 17)), _image(37 + _field((12, 14, 17)).get_fdata()), 0)
     assert _layers(viewer).count('Intensity') == 1 and _layers(viewer).count('Temperature') == 1
 
@@ -279,7 +296,9 @@ def test_results_only_go_to_their_trajectory(harness_factory):
     h = harness_factory(['left', 'right'])
     h.run_step1([(8, 10, 12), (16, 18, 20)])
     window = h.open_viewer()
+    logging.info("Step 2 results for the right trajectory only")
     h.UpdateNiftiAcResults(_field((16, 18, 20)), _field((16, 18, 22)), 1)
+    logging.info("Checking only the right trajectory's tab got Skull and Water")
     assert _layers(window.viewer[0]) == ['', 'T1W']
     assert _layers(window.viewer[1]) == ['', 'T1W', 'Skull', 'Water']
 
@@ -288,35 +307,45 @@ def test_merged_results_go_to_every_trajectory(harness_factory):
     h = harness_factory(['left', 'right'])
     h.run_step1([(8, 10, 12), (16, 18, 20)])
     window = h.open_viewer()
+    logging.info("Step 2 results for both trajectories")
     for n, peak in enumerate([(8, 10, 12), (16, 18, 20)]):
         h.UpdateNiftiAcResults(_field(peak), _field(peak), n)
 
+    logging.info("Combining trajectories twice (Step 2)")
     merged = _field((12, 14, 16))
     h.UpdateNiftiMergedAcResults(merged)
     h.UpdateNiftiMergedAcResults(merged)   # recombining replaces the merged field
+    logging.info("Checking each tab has one MergedAc layer, shown, with Skull hidden")
     for viewer in window.viewer:
         assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water', 'MergedAc']
         assert not _visible(viewer, 'Skull') and _visible(viewer, 'MergedAc')
 
+    logging.info("Combining trajectories for Step 3")
     h.UpdateNiftiMergedThermalResults(merged, _image(37 + merged.get_fdata()))
+    logging.info("Checking each tab shows MergedIntensity and hides MergedAc")
     for viewer in window.viewer:
         assert _layers(viewer)[-2:] == ['MergedIntensity', 'MergedTemperature']
         assert not _visible(viewer, 'MergedAc') and _visible(viewer, 'MergedIntensity')
 
 
 def test_reopening_viewer_shows_existing_results(harness):
+    logging.info("Step 2 and 3 results arrive with the viewer closed")
     harness.UpdateNiftiAcResults(_field((12, 14, 16)), _field((12, 14, 18)), 0)   # viewer closed: only stored
     harness.UpdateNiftiTemperatureResults(_field((12, 14, 16)), _image(37 + _field((12, 14, 16)).get_fdata()), 0)
     window = harness.open_viewer()
+    logging.info("Checking the viewer opens with all stored results")
     assert _layers(window.viewer[0]) == ['', 'T1W', 'Skull', 'Water', 'Intensity', 'Temperature']
 
 
 def test_closing_viewer_releases_it(harness):
     window = harness.open_viewer()
+    logging.info("Closing the viewer window")
     window.close()
+    logging.info("Checking BabelBrain dropped its reference to the window")
     assert not harness.viewer_open
     # Results arriving after the window was closed are only stored
     harness.UpdateNiftiAcResults(_field((12, 14, 16)), _field((12, 14, 18)), 0)
+    logging.info("Checking Step 2 results were stored, and shown when the viewer is reopened")
     assert harness._NiftiSkull[0] is not None
     window = harness.open_viewer()
     assert 'Skull' in _layers(window.viewer[0])
@@ -329,10 +358,13 @@ def test_rerunning_step1_with_viewer_open(harness):
     harness.UpdateNiftiAcResults(_field((12, 14, 16)), _field((12, 14, 18)), 0)
     harness.UpdateAcousticTab.reset_mock()
 
+    logging.info("Rerunning Step 1 with the viewer open, new focal point (10, 18, 20)")
     harness.run_step1([(10, 18, 20)])
 
     viewer = window.viewer[0]
+    logging.info("Checking the Step 2 tab was updated once")
     harness.UpdateAcousticTab.assert_called_once()
+    logging.info("Checking the viewer shows the new domain at the new target, without the old Step 2 fields")
     # New domain, at the new target, without the Step 2 results of the previous domain
     assert _layers(viewer) == ['', 'T1W']
     assert [vp._slider.value() for vp in viewer._vps] == [18, 10, 20]
@@ -343,8 +375,12 @@ def test_rerunning_step1_with_viewer_open_multiple_trajectories(harness_factory)
     h = harness_factory(['left', 'right'])
     h.run_step1([(8, 10, 12), (16, 18, 20)])
     window = h.open_viewer()
+    logging.info("Rerunning Step 1 on both trajectories with the viewer open")
     h.run_step1([(9, 11, 13), (15, 17, 19)])
+    logging.info(f"Checking the Step 2 tab was updated 4 times (2 runs x 2 trajectories), "
+                 f"got {h.UpdateAcousticTab.call_count}")
     assert h.UpdateAcousticTab.call_count == 4
+    logging.info("Checking each tab moved to its new focal point")
     assert [vp._slider.value() for vp in window.viewer[0]._vps] == [11, 9, 13]
     assert [vp._slider.value() for vp in window.viewer[1]._vps] == [17, 15, 19]
 
@@ -371,12 +407,15 @@ def test_synthetic_head_ct_and_air_overlays(harness_factory, viewer_screenshots)
     h = harness_factory(['synthetic'])
     h.run_step1_synthetic([vh.SYNTHETIC_TARGET], ct=True, air=True)
     viewer = h.open_viewer().viewer[0]
+    logging.info("Taking a screenshot of the Step 1 domain")
     pixels = viewer_screenshots.add(viewer, "Step 1 domain with CT and air regions")
 
+    logging.info("Checking CT (HU from its look-up table) and Air layers hold Step 1's data")
     assert _layers(viewer) == ['', 'T1W', 'CT', 'Air']
     indices, unique_hu = vh.synthetic_ct_indices()
     np.testing.assert_allclose(vh.layer_data(viewer, 'CT'), unique_hu[np.asarray(indices.dataobj)])
     np.testing.assert_array_equal(vh.layer_data(viewer, 'Air'), np.asarray(vh.synthetic_air_mask().dataobj))
+    logging.info("Checking CT and Air display settings (50 % opacity, cutoff 1, visible), and the focal point slices")
     for layer_id in ('CT', 'Air'):
         rec = vh.layer(viewer, layer_id)
         assert rec.opacity == pytest.approx(0.5) and rec.cutoff == 1.0 and rec.visible
@@ -395,10 +434,12 @@ def test_synthetic_head_all_steps(harness_factory, viewer_screenshots):
     step1 = viewer_screenshots.add(viewer, "Step 1: tissue mask and T1W (50 %)")
     assert _layers(viewer) == ['', 'T1W']
 
+    logging.info(f"Making Step 2/3 fields peaking at the focal point {vh.SYNTHETIC_TARGET}")
     t1 = vh.synthetic_t1()
     skull, water, intensity, temperature = _steps_fields(t1, vh.SYNTHETIC_TARGET)
     h.UpdateNiftiAcResults(skull, water, 0)
     step2 = viewer_screenshots.add(viewer, "Step 2: skull pressure (Jet, cutoff 0.25), water field hidden")
+    logging.info("Checking Step 2: Skull data and visibility, window/level on the Skull layer")
     assert _layers(viewer) == ['', 'T1W', 'Skull', 'Water']
     np.testing.assert_allclose(vh.layer_data(viewer, 'Skull'), skull.get_fdata())
     assert _visible(viewer, 'Skull') and not _visible(viewer, 'Water')
@@ -406,19 +447,23 @@ def test_synthetic_head_all_steps(harness_factory, viewer_screenshots):
 
     h.UpdateNiftiTemperatureResults(intensity, temperature, 0)
     step3 = viewer_screenshots.add(viewer, "Step 3: intensity (cutoff 0.1), temperature hidden, Step 2 fields hidden")
+    logging.info("Checking Step 3: only Intensity shown (cutoff 0.1) and selected, Temperature data stored")
     assert _layers(viewer)[-2:] == ['Intensity', 'Temperature']
     np.testing.assert_allclose(vh.layer_data(viewer, 'Temperature'), temperature.get_fdata())
     assert [_visible(viewer, i) for i in ('Skull', 'Water', 'Intensity', 'Temperature')] == [False, False, True, False]
     assert vh.layer(viewer, 'Intensity').cutoff == 0.1
     assert viewer._selected_vol == _layers(viewer).index('Intensity')
 
+    logging.info("Showing Temperature instead of Intensity with the eye buttons")
     _row(viewer, 'Temperature')._eye_btn.setChecked(True)
     _row(viewer, 'Intensity')._eye_btn.setChecked(False)
     temperature_view = viewer_screenshots.add(viewer, "Step 3: temperature shown instead (cutoff 37.05)")
 
+    logging.info("Checking each step changed the views around the focal point only")
     # Each step changes the views, around the focal point only
     for before, after in [(step1, step2), (step2, step3), (step3, temperature_view)]:
         changed = np.abs(before.astype(int) - after.astype(int)).max(axis=-1) > 30
+        logging.info(f"  {changed.mean():.2%} of pixels changed")
         assert 0.001 < changed.mean() < 0.5
 
 
@@ -429,6 +474,7 @@ def test_synthetic_head_two_trajectories(harness_factory, viewer_screenshots):
     h.run_step1_synthetic([LEFT, RIGHT])
     window = h.open_viewer()
     viewer_screenshots.add_window(window, "Step 1")
+    logging.info(f"Checking the tabs open on their focal points, left {LEFT} and right {RIGHT}")
     assert vh.slider_values(window.viewer[0]) == [LEFT[1], LEFT[0], LEFT[2]]
     assert vh.slider_values(window.viewer[1]) == [RIGHT[1], RIGHT[0], RIGHT[2]]
 
@@ -437,14 +483,17 @@ def test_synthetic_head_two_trajectories(harness_factory, viewer_screenshots):
         skull, water, _, _ = _steps_fields(t1, peak)
         h.UpdateNiftiAcResults(skull, water, n)
     viewer_screenshots.add_window(window, "Step 2 per trajectory")
+    logging.info("Checking each tab's Skull field peaks at its own focal point")
     for viewer, peak in zip(window.viewer, (LEFT, RIGHT)):
         data = vh.layer_data(viewer, 'Skull')
         assert np.unravel_index(np.argmax(data), data.shape) == peak
 
+    logging.info("Combining trajectories: merged field is the maximum of both fields")
     merged = nibabel.Nifti1Image(np.maximum(vh.gaussian_field(t1, LEFT).get_fdata(),
                                             vh.gaussian_field(t1, RIGHT).get_fdata()).astype(np.float32), t1.affine)
     h.UpdateNiftiMergedAcResults(merged)
     viewer_screenshots.add_window(window, "Step 2 Combine Trajectories (merged field, per trajectory fields hidden)")
+    logging.info("Checking both tabs show MergedAc with its data and hide their own Skull field")
     for viewer in window.viewer:
         assert _layers(viewer)[-1] == 'MergedAc'
         assert _visible(viewer, 'MergedAc') and not _visible(viewer, 'Skull')

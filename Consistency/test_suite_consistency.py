@@ -7,6 +7,7 @@ These need no GPU and run in seconds:
 
     pytest Tests/Consistency
 """
+import logging
 import os
 
 import pytest
@@ -29,6 +30,8 @@ GUI_OPTION_LABELS = {
 def test_gui_options_match_test_labels(combo_name):
     gui_items = P.selfiles_combo_items(combo_name)
     labels = GUI_OPTION_LABELS[combo_name]
+    logging.info(f"{combo_name}: {len(gui_items)} option(s) in SelFiles/form.ui, {len(labels)} named in parameters.py")
+    logging.info("Checking every GUI option has a test name")
     assert gui_items, f"{combo_name} not found in SelFiles/form.ui"
 
     untested = [item for item in gui_items if item not in labels.values()]
@@ -36,6 +39,7 @@ def test_gui_options_match_test_labels(combo_name):
 
     # Options missing from the app (older version, or removed) just aren't parametrized; a rename
     # is caught above as an untested option
+    logging.info("Checking every test name is still a GUI option")
     missing = [label for label in labels.values() if label not in gui_items]
     if missing:
         pytest.skip(f"{combo_name} option(s) {missing} are not in BabelBrain {P.BABELBRAIN_VERSION}, "
@@ -58,6 +62,8 @@ def _referenced_transducers():
 @pytest.mark.parametrize('where,transducer,freq_khz', _referenced_transducers(),
                          ids=lambda v: str(v))
 def test_referenced_transducers_exist(where, transducer, freq_khz):
+    logging.info(f"Checking {where} names a built-in transducer {transducer}"
+                 f"{f' with a {freq_khz} kHz frequency' if freq_khz is not None else ''}")
     assert transducer in P.TRANSDUCERS_BY_NAME, \
         f"{where} names transducer {transducer}, which is not in SelFiles/transducer_list.yaml"
     if freq_khz is not None:
@@ -70,6 +76,7 @@ def test_every_transducer_type_has_full_pipeline_regression():
     if not P.TRANSDUCER_TYPES:
         pytest.skip(f"BabelBrain {P.BABELBRAIN_VERSION} doesn't define transducer geometry types")
     transducers = P.BASIC_PARAMS['transducers']
+    logging.info(f"Checking the {len(transducers)} BASIC_PARAMS transducer(s) cover every type in {sorted(P.TRANSDUCER_TYPES)}")
     covered = {P.TRANSDUCERS_BY_NAME[tx]['transducer_type'] for tx, _ in transducers if tx in P.TRANSDUCERS_BY_NAME}
     missing = sorted(set(P.TRANSDUCER_TYPES) - covered)
     assert not missing, f"Transducer type(s) {missing} have no transducer in BASIC_PARAMS (regression_test_full_pipeline)"
@@ -80,6 +87,8 @@ def test_regression_case_options_exist(name):
     """Every dataset, trajectory type, target and scan type a regression or E2E case names is one
     the tests and the BabelBrain version under test know."""
     spec = P.PIPELINE_CASE_SPECS[name]
+    logging.info(f"Checking {name}: dataset {spec['dataset']}, target {spec['target']}, "
+                 f"trajectory {spec['trajectory_type']}, scans {spec['ct_types']}")
     targets = {**P.VALID_INDIVIDUAL_TARGETS, **P.VALID_COMBINED_TARGETS}
     assert spec['dataset'] in P.DATASETS, f"{name}: unknown dataset {spec['dataset']}"
     assert spec['target'] in targets, f"{name}: unknown target {spec['target']}"
@@ -92,6 +101,8 @@ def test_regression_case_options_exist(name):
 @P.requires_feature('custom_transducers')
 def test_every_custom_template_has_builtin_equivalent():
     templates, equivalents = set(P.CUSTOM_TX_TEMPLATES), set(P.CUSTOM_TX_EQUIVALENTS)
+    logging.info(f"Checking the {len(templates)} custom template(s) and the {len(equivalents)} "
+                 "CUSTOM_TX_EQUIVALENTS entries name the same templates")
     assert not templates - equivalents, \
         f"Custom transducer template(s) {sorted(templates - equivalents)} have no entry in CUSTOM_TX_EQUIVALENTS"
     assert not equivalents - templates, \
@@ -107,6 +118,8 @@ def test_custom_template_matches_its_equivalent(template):
     with open(path) as f:
         config = yaml.safe_load(f)
     equivalent = P.CUSTOM_TX_EQUIVALENTS[template]
+    logging.info(f"Checking template {template} matches built-in {equivalent['transducer']}: "
+                 f"same geometry type ({config.get('geometry_type')}) and includes {equivalent['freq_khz']} kHz")
 
     tx = P.TRANSDUCERS_BY_NAME.get(equivalent['transducer'])
     assert tx is not None, f"{equivalent['transducer']} is not a built-in transducer"
@@ -152,12 +165,16 @@ def _optional_inputs():
 
 
 def test_required_test_inputs_exist():
-    missing = [f for f in _required_inputs() if not os.path.exists(f)]
+    required = _required_inputs()
+    logging.info(f"Checking the {len(required)} input file(s) the release test matrix needs exist")
+    missing = [f for f in required if not os.path.exists(f)]
     assert not missing, "Missing test inputs:\n" + "\n".join(missing)
 
 
 def test_optional_test_inputs_exist():
-    missing = [f for f in _optional_inputs() if not os.path.exists(f)]
+    optional = _optional_inputs()
+    logging.info(f"Checking the {len(optional)} optional input file(s) exist (missing ones skip their tests)")
+    missing = [f for f in optional if not os.path.exists(f)]
     if missing:
         pytest.skip(f"{len(missing)} optional inputs are missing, the tests using them are skipped:\n"
                     + "\n".join(missing))

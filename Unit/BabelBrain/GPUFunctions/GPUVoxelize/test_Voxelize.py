@@ -24,11 +24,15 @@ def test_Voxelize_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
           'Output_Truth': input_folder + f"T1W_cpu_voxelized_spatial_step_{spatial_step_text}.npy",
      }
 
+     logging.info("Testing GPU voxelization of the skin mesh against trimesh")
+
      # Initialize GPU Backend
      gpu_device = get_gpu_device
+     logging.info(f"Initializing Voxelize on {computing_backend['type']} (device {gpu_device})")
      Voxelize.InitVoxelize(gpu_device,computing_backend['type'])
 
      # Load inputs
+     logging.info("Loading T1W and skin.stl")
      input_data = load_files(input_files)
 
      # Fix mesh if needed (in memory only, the test data is left untouched)
@@ -43,10 +47,12 @@ def test_Voxelize_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
      with log_duration(f"GPU voxelization ({computing_backend['type']})"):
          points_gpu = Voxelize.Voxelize(input_data['skin'],targetResolution=spatial_step,GPUBackend=computing_backend['type'])
      describe_array('GPU output', points_gpu)
+     logging.info("Getting CPU truth (trimesh voxelized + fill)")
      points_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                    lambda: input_data['skin'].voxelized(spatial_step,max_iter=30).fill().points)
 
      # Save plot screenshot to be added to html report later
+     logging.info("Rendering mesh and voxel views for the report")
      save_voxel_plot = get_pyvista_plot['voxel_plot']
      save_mesh_plot = get_pyvista_plot['mesh_plot']
      request.node.screenshots = []
@@ -57,6 +63,7 @@ def test_Voxelize_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
                      ("GPU voxelization (test)", save_voxel_plot(input_data['skin'],points_gpu, title="Skin Mesh Voxelized - Test"))]
      
      # Convert voxels back to integer 3D indices
+     logging.info("Matching GPU and CPU voxels on the T1W-derived grid")
      inv_affine = np.linalg.inv(new_affine)
      ijk = np.round(points_gpu @ inv_affine[:3,:3].T + inv_affine[:3,3]).astype(np.int64)
      ijk_truth = np.round(points_cpu @ inv_affine[:3,:3].T + inv_affine[:3,3]).astype(np.int64)
@@ -84,6 +91,7 @@ def test_Voxelize_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu
 
      # Calculate dice coefficient
      dice_coeff = 2 * match_count / (keys_gpu.size + keys_cpu.size)
-     logging.info(f"Dice coefficient: {dice_coeff}")
+     # Looser than the other GPU tests (0.99): voxelization differs at the mesh surface between implementations
+     logging.info(f"Checking GPU vs CPU voxel dice coefficient > 0.95: {dice_coeff} ({only_gpu.size} GPU-only, {only_cpu.size} CPU-only)")
 
      assert dice_coeff > 0.95, f"Dice coefficient is less than 0.95 ({dice_coeff})"

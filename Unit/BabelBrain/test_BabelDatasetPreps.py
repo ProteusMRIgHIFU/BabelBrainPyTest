@@ -53,6 +53,7 @@ SAVE_REAL_DATA_SCENES = os.environ.get('BABEL_PYTEST_SAVE_BLENDER_SCENES') == '1
 def blender_boolean_problem():
     """None when trimesh's Blender booleans work here, else why not (checked once, only if a Blender
     test needs it)."""
+    logging.info("Checking trimesh's Blender boolean on two overlapping spheres")
     a = trimesh.creation.icosphere(subdivisions=2, radius=10)
     b = trimesh.creation.icosphere(subdivisions=2, radius=8)
     b.apply_translation((12, 0, 0))
@@ -64,6 +65,7 @@ def blender_boolean_problem():
         version = subprocess.run([blender._blender_executable, '--version'], capture_output=True, text=True).stdout.split('\n')[0]
         return (f"trimesh's Blender boolean returned an empty mesh for two overlapping spheres ({version}, trimesh "
                 f"{trimesh.__version__}), so DoIntersect(bForceUseBlender=True) can't work in this environment")
+    logging.info(f"trimesh's Blender boolean works (intersection volume {abs(result.volume):.6g} mm^3)")
     return None
 
 
@@ -133,6 +135,7 @@ def _blender_view(request, mesh1, mesh2, save_scene):
     blend_path = None
     if save_scene:
         blend_path = BLENDER_SCENES_DIR / (re.sub(r'[^0-9A-Za-z._-]+', '_', request.node.name) + '.blend')
+    logging.info(f"Computing Blender's own intersection of the inputs (scene: {blend_path or 'not saved'})")
     result, _ = blender_boolean(mesh1, mesh2, blend_path=str(blend_path) if blend_path else None)
     return result, blend_path
 
@@ -191,9 +194,11 @@ class TestDoIntersectSynthetic:
 
     def test_overlapping_spheres(self, use_blender, request, get_pyvista_plot):
         r1, r2, d = 10.0, 8.0, 12.0
+        logging.info(f"Spheres of radii {r1} and {r2} mm with centres {d} mm apart")
         a, b = sphere(r1), sphere(r2, center=(d, 0, 0))
         result = run_do_intersect(request, get_pyvista_plot, a, b, use_blender)
 
+        logging.info(f"Checking the intersection is valid and has the lens volume {lens_volume(r1, r2, d):.6g} mm^3")
         assert_valid_intersection(result, a, b)
         # Icospheres are slightly smaller than true spheres, hence the 2% tolerance
         assert result.volume == pytest.approx(lens_volume(r1, r2, d), rel=0.02)
@@ -202,38 +207,46 @@ class TestDoIntersectSynthetic:
         """Like Step 1's skin cut: cone apex inside the head, base outside. The intersection is a
         spherical sector, (2/3) pi R^3 (1 - cos(half angle))."""
         radius, cone_height, cone_radius = 10.0, 20.0, 12.0
+        logging.info(f"Sphere of radius {radius} mm, cone ({cone_height} mm high, {cone_radius} mm radius) from its centre")
         a = sphere(radius)
         b = cone_from_apex((0, 0, 0), (0.3, -0.2, 1.0), cone_height, cone_radius)
         result = run_do_intersect(request, get_pyvista_plot, a, b, use_blender)
 
+        logging.info("Checking the intersection is valid and has the spherical sector volume")
         assert_valid_intersection(result, a, b)
         half_angle = np.arctan(cone_radius / cone_height)
         assert result.volume == pytest.approx(2/3*np.pi*radius**3*(1 - np.cos(half_angle)), rel=0.02)
 
     def test_box_inside_sphere(self, use_blender, request, get_pyvista_plot):
         """Like the FOV box cut of a deep region: a fully contained box comes back unchanged."""
+        logging.info("Sphere of radius 20 mm with a 10x8x6 mm box fully inside it")
         a, b = sphere(20.0), box((10, 8, 6), center=(2, -1, 1))
         result = run_do_intersect(request, get_pyvista_plot, a, b, use_blender)
 
+        logging.info("Checking the intersection is valid and equal to the box (volume and bounds)")
         assert_valid_intersection(result, a, b)
         assert result.volume == pytest.approx(b.volume, rel=1e-6)
         assert np.allclose(result.bounds, b.bounds, atol=1e-6)
 
     def test_box_cuts_sphere_in_half(self, use_blender, request, get_pyvista_plot):
+        logging.info("Sphere of radius 10 mm with a box covering its upper half")
         a, b = sphere(10.0), box((30, 30, 15), center=(0, 0, 7.5))
         result = run_do_intersect(request, get_pyvista_plot, a, b, use_blender)
 
+        logging.info("Checking the intersection is valid and half the sphere's volume")
         assert_valid_intersection(result, a, b)
         assert result.volume == pytest.approx(a.volume/2, rel=1e-3)
 
     def test_disjoint_meshes_raise(self, use_blender, request, get_pyvista_plot):
         """A trajectory outside the head gives an empty intersection, which must be reported."""
+        logging.info("Sphere of radius 10 mm with a 5 mm box 30 mm away")
         a, b = sphere(10.0), box((5, 5, 5), center=(30, 0, 0))
         expect_outside_headspace(request, get_pyvista_plot, a, b, use_blender)
 
     def test_multi_body_mesh_is_repaired(self, use_blender, request, get_pyvista_plot):
         """Meshes with more than one body (e.g. a stray island in a charm surface) go through FixMesh
         first; the intersection must still be valid and keep the main body."""
+        logging.info("Two-body mesh (10 mm sphere plus a 1 mm stray sphere) cut by a box covering the upper half")
         main = sphere(10.0)
         stray = sphere(1.0, center=(25, 0, 0), subdivisions=2)
         two_bodies = trimesh.util.concatenate([main, stray])
@@ -241,12 +254,14 @@ class TestDoIntersectSynthetic:
         b = box((30, 30, 15), center=(0, 0, 7.5))
         result = run_do_intersect(request, get_pyvista_plot, two_bodies, b, use_blender)
 
+        logging.info("Checking the intersection is valid against the main body and half its volume")
         assert_valid_intersection(result, main, b)
         assert result.volume == pytest.approx(main.volume/2, rel=0.02)
 
     def test_open_mesh_is_repaired(self, use_blender, request, get_pyvista_plot):
         """A mesh with a hole (not a closed volume, like ernie's charm meshes) is closed before
         intersecting."""
+        logging.info("10 mm sphere with three top faces removed, cut by a box covering the upper half")
         holed = sphere(10.0)
         top = np.argsort(holed.triangles_center[:, 2])[-3:]  # remove three faces at the top
         holed.update_faces(np.setdiff1d(np.arange(len(holed.faces)), top))
@@ -255,6 +270,7 @@ class TestDoIntersectSynthetic:
         b = box((30, 30, 15), center=(0, 0, 7.5))
         result = run_do_intersect(request, get_pyvista_plot, holed, b, use_blender)
 
+        logging.info("Checking the intersection is valid against the closed sphere and half its volume")
         assert_valid_intersection(result, reference, b)
         assert result.volume == pytest.approx(reference.volume/2, rel=0.02)
 
@@ -278,6 +294,8 @@ def step1_shapes(trajectory_path):
     if pose.ndim == 3:
         pose = pose[:, :, 0]
     target, towards_tx = pose[:3, 3], pose[:3, 2]
+    logging.info(f"Building Step 1 cone ({CONE_HEIGHT:.1f} mm high, {CONE_RADIUS:.1f} mm radius) and FOV box at target "
+                 f"{np.round(target, 1)} from {trajectory_path.name}")
     cone = cone_from_apex(target, towards_tx, CONE_HEIGHT, CONE_RADIUS)
     # Box covering the cone, from 20 mm beyond the target to the transducer
     extents = (2*CONE_RADIUS, 2*CONE_RADIUS, CONE_HEIGHT + 20)
@@ -299,16 +317,19 @@ class TestDoIntersectRealData:
         traj = trajectory_file('brainsight', dataset['id'], trajectory)
         if not traj.exists():
             pytest.skip(f"Trajectory file not found: {traj}")
+        logging.info(f"Loading {dataset['id']} {tissue}.stl and cutting it with the Step 1 {shape} for {traj.name}")
         mesh = load_files([dataset['m2m_folder_path'] + f"{tissue}.stl"])[0]
         cutter = step1_shapes(traj)[shape]
 
         result = run_do_intersect(request, get_pyvista_plot, mesh, cutter, use_blender, names=(tissue, shape),
                                   save_scene=SAVE_REAL_DATA_SCENES)
+        logging.info(f"Checking the intersection is valid and at least 1% of the {shape} volume")
         assert_valid_intersection(result, mesh, cutter)
         assert result.volume > 0.01*cutter.volume, "Intersection is suspiciously small"
 
     def test_do_intersect_invalid_case(self, use_blender, dataset, load_files, get_pyvista_plot, request):
         """A box placed outside the head must raise "Trajectory is outside headspace"."""
+        logging.info(f"Loading {dataset['id']} skin.stl")
         skin_stl = load_files([dataset['m2m_folder_path'] + "skin.stl"])[0]
 
         skin_dims = np.diff(skin_stl.bounds, axis=0)[0]
@@ -320,6 +341,7 @@ class TestDoIntersectRealData:
         box_transform[1, 3] = max_skin_dim/2 + box_radius + offset
         box_transform[2, 3] = max_skin_dim/2 + box_radius + offset
         box_stl = trimesh.creation.box(extents=[box_radius*2]*3, transform=box_transform)
+        logging.info(f"Placing a {box_radius*2:.0f} mm box outside the skin's extent (max dimension {max_skin_dim:.0f} mm)")
 
         expect_outside_headspace(request, get_pyvista_plot, skin_stl, box_stl, use_blender, names=('skin', 'box'),
                                  save_scene=SAVE_REAL_DATA_SCENES)

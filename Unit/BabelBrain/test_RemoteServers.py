@@ -28,24 +28,30 @@ def rs(tmp_path, monkeypatch):
 def test_record_defaults(rs):
     """A bare record gets the default host/port and every TLS option off, so http-only records
     saved by older versions keep working."""
+    logging.info("Normalising a record with only a (padded) name")
     record = rs._norm({'name': ' lab '})
     logging.info(f"Normalised record: {record}")
+    logging.info("Checking defaults: 127.0.0.1:8760, no token, TLS off")
     assert record == {'name': 'lab', 'host': '127.0.0.1', 'port': 8760, 'token': None, 'https': False,
                       'cafile': None, 'client_cert': None, 'client_key': None, 'insecure': False}
 
 
 def test_record_blank_optional_fields_become_none(rs):
+    logging.info("Normalising a record with blank host, port, token and cafile")
     record = rs._norm({'name': 'lab', 'host': '  ', 'port': '', 'token': '  ', 'cafile': ''})
+    logging.info("Checking blanks fall back to the default host/port and None")
     assert (record['host'], record['port'], record['token'], record['cafile']) == ('127.0.0.1', 8760, None, None)
 
 
 def test_save_and_load_round_trip(rs):
     servers = [{'name': 'gpu-box', 'host': '10.0.0.5', 'port': 9000, 'token': 'secret'},
                {'name': 'tls-box', 'host': 'tls.lab', 'https': True, 'cafile': '/ca.pem'}]
+    logging.info(f"Saving {[s['name'] for s in servers]} to the servers file")
     rs.save_servers(servers)
     with open(rs.servers_path()) as f:
         logging.info(f"servers.json:\n{f.read()}")
     loaded = rs.load_servers()
+    logging.info("Checking the loaded records keep their values and get defaults for the rest")
     assert [s['name'] for s in loaded] == ['gpu-box', 'tls-box']
     assert (loaded[0]['port'], loaded[0]['token'], loaded[0]['https']) == (9000, 'secret', False)
     assert (loaded[1]['https'], loaded[1]['cafile'], loaded[1]['port']) == (True, '/ca.pem', 8760)
@@ -55,20 +61,25 @@ def test_save_and_load_round_trip(rs):
 def test_load_ignores_missing_or_invalid_files(rs, content):
     """A missing, corrupt or wrongly shaped file gives an empty list instead of an error (entries
     without a name are dropped)."""
+    logging.info(f"Servers file content: {content!r}" if content else "No servers file")
     if content:
         with open(rs.servers_path(), 'w') as f:
             f.write(content)
+    logging.info("Checking load_servers returns an empty list")
     assert rs.load_servers() == []
 
 
 def test_add_update_get_and_remove(rs):
+    logging.info("Adding servers a and b, then updating a")
     rs.add_or_update({'name': 'a', 'host': 'host-a'})
     rs.add_or_update({'name': 'b', 'host': 'host-b'})
     rs.add_or_update({'name': 'a', 'host': 'host-a2', 'token': 't'})   # same name replaces
     logging.info(f"After adding a, b and updating a: {rs.load_servers()}")
+    logging.info("Checking a was replaced, not duplicated, and get_server finds the update")
     assert sorted(s['name'] for s in rs.load_servers()) == ['a', 'b']
     assert rs.get_server('a')['host'] == 'host-a2' and rs.get_server('a')['token'] == 't'
     assert rs.get_server('missing') is None
+    logging.info("Removing a and checking only b is left")
     rs.remove('a')
     assert [s['name'] for s in rs.load_servers()] == ['b']
 
@@ -78,24 +89,31 @@ def test_add_update_get_and_remove(rs):
     ({'host': '10.0.0.5', 'port': '9000', 'https': True}, 'https://10.0.0.5:9000'),
 ])
 def test_base_url(rs, record, url):
+    logging.info(f"Checking {record} gives {url}")
     assert rs.base_url(record) == url
 
 
 def test_ssl_context_plain_http_has_none(rs):
+    logging.info("Checking an http record has no SSL context")
     assert rs.ssl_context({'https': False}) is None
 
 
 def test_ssl_context_verifies_by_default(rs):
+    logging.info("Building the SSL context for an https record with default options")
     ctx = rs.ssl_context({'https': True})
+    logging.info(f"Checking certificate and hostname verification are on (verify_mode {ctx.verify_mode})")
     assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
 
 
 def test_ssl_context_insecure_skips_verification(rs):
+    logging.info("Building the SSL context for an https record marked insecure")
     ctx = rs.ssl_context({'https': True, 'insecure': True})
+    logging.info(f"Checking certificate and hostname verification are off (verify_mode {ctx.verify_mode})")
     assert ctx.verify_mode == ssl.CERT_NONE and not ctx.check_hostname
 
 
 def test_ssl_context_missing_cafile_raises(rs, tmp_path):
+    logging.info(f"Checking a missing cafile ({tmp_path / 'missing.pem'}) raises")
     with pytest.raises((FileNotFoundError, ssl.SSLError, OSError)):
         rs.ssl_context({'https': True, 'cafile': str(tmp_path / 'missing.pem')})
 
@@ -106,6 +124,8 @@ def test_connection_to_closed_port_reports_unreachable(rs):
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
         port = s.getsockname()[1]   # free port, closed again before connecting
+    logging.info(f"Testing the connection to closed port {port} (2 s timeout)")
     ok, info = rs.test_connection({'host': '127.0.0.1', 'port': port}, timeout=2)
     logging.info(f"test_connection to closed port {port}: {ok}, {info}")
+    logging.info("Checking it failed with a 'Cannot reach' message")
     assert not ok and info.startswith(f"Cannot reach http://127.0.0.1:{port}")

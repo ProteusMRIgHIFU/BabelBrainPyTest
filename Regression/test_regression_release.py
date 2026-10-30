@@ -19,6 +19,8 @@ reference location and run only the generate tests:
 
     pytest Tests/Regression -m generate_outputs
 """
+import logging
+
 import pytest
 
 from Tests.helpers.parameters import REGRESSION_CASES
@@ -52,24 +54,28 @@ SKULL_MASK_CASES = regression_cases('regression_test_GetSkullMaskFromSimbNIBSSTL
 @pytest.mark.generate_outputs
 @pytest.mark.parametrize('case', FULL_PIPELINE_CASES)
 def test_generate_regression_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: saving outputs for suite {FULL_PIPELINE_SUITE}")
     pipeline.ensure_outputs(FULL_PIPELINE_SUITE, case)
 
 
 @pytest.mark.generate_outputs
 @pytest.mark.parametrize('case', FULL_PIPELINE_INTENSIVE_CASES)
 def test_generate_regression_full_pipeline_intensive(pipeline, case):
+    logging.info(f"Case {case.case_id}: saving outputs for suite {FULL_PIPELINE_INTENSIVE_SUITE}")
     pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
 
 
 @pytest.mark.generate_outputs
 @pytest.mark.parametrize('case', FULL_PIPELINE_SOFT_TISSUE_CASES)
 def test_generate_regression_full_pipeline_soft_tissue(pipeline, case):
+    logging.info(f"Case {case.case_id}: saving outputs for suite {FULL_PIPELINE_SOFT_TISSUE_SUITE}")
     pipeline.ensure_outputs(FULL_PIPELINE_SOFT_TISSUE_SUITE, case)
 
 
 @pytest.mark.generate_outputs
 @pytest.mark.parametrize('case', SKULL_MASK_CASES)
 def test_generate_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, case):
+    logging.info(f"Case {case.case_id}: saving outputs for suite {SKULL_MASK_SUITE}")
     pipeline.ensure_outputs(SKULL_MASK_SUITE, case)
 
 
@@ -78,27 +84,35 @@ def test_generate_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, case):
 # ================================================================================================================================
 @pytest.mark.parametrize('case', FULL_PIPELINE_CASES)
 def test_regression_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: comparing with the reference outputs of suite {FULL_PIPELINE_SUITE}")
     ref_dir = find_reference_dir(FULL_PIPELINE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_SUITE, case)
+    logging.info("Checking the thermal outputs match the reference exactly")
     pipeline.assert_thermal_outputs_match(ref_dir, test_dir)
 
 
 @pytest.mark.parametrize('case', FULL_PIPELINE_INTENSIVE_CASES)
 def test_regression_full_pipeline_intensive(pipeline, case):
+    logging.info(f"Case {case.case_id}: comparing with the reference outputs of suite {FULL_PIPELINE_INTENSIVE_SUITE}")
     ref_dir = find_reference_dir(FULL_PIPELINE_INTENSIVE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_INTENSIVE_SUITE, case)
+    logging.info("Checking the thermal outputs match the reference exactly")
     pipeline.assert_thermal_outputs_match(ref_dir, test_dir)
 
 
 @pytest.mark.parametrize('case', FULL_PIPELINE_SOFT_TISSUE_CASES)
 def test_regression_full_pipeline_soft_tissue(pipeline, case):
+    logging.info(f"Case {case.case_id}: comparing with the reference outputs of suite {FULL_PIPELINE_SOFT_TISSUE_SUITE}")
     ref_dir = find_reference_dir(FULL_PIPELINE_SOFT_TISSUE_SUITE, case)
     test_dir = pipeline.ensure_outputs(FULL_PIPELINE_SOFT_TISSUE_SUITE, case)
+    logging.info("Checking the thermal outputs match the reference exactly")
     pipeline.assert_thermal_outputs_match(ref_dir, test_dir)
 
 
 @pytest.mark.parametrize('case', SKULL_MASK_CASES)
 def test_regression_GetSkullMaskFromSimbNIBSSTL(pipeline, case):
+    logging.info(f"Case {case.case_id}: comparing with the reference outputs of suite {SKULL_MASK_SUITE}")
     ref_dir = find_reference_dir(SKULL_MASK_SUITE, case)
     test_dir = pipeline.ensure_outputs(SKULL_MASK_SUITE, case)
+    logging.info("Checking every output file matches the reference exactly")
     pipeline.assert_all_outputs_match(ref_dir, test_dir)

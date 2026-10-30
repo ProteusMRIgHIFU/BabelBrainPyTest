@@ -20,17 +20,21 @@ def test_MedianFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get
           'Output_Truth': input_folder + f"CT_cpu_median_filter_spatial_step_{spatial_step_text}.nii.gz"
      }
 
+     logging.info("Testing GPU median filter of the CT against scipy")
+
      # Initialize GPU Backend
      gpu_device = get_gpu_device
+     logging.info(f"Initializing MedianFilter on {computing_backend['type']} (device {gpu_device})")
      MedianFilter.InitMedianFilter(gpu_device,computing_backend['type'])
 
      # Load inputs
+     logging.info("Loading CT and resampling it to the spatial step")
      input_data = load_files(input_files)
 
      # Get resampled input for specified spatial step
      resampled_nifti, resampled_data = get_resampled_input(input_data['CT'],spatial_step,output_fnames['Resampled_Input'])
 
-     # Determine median filter size
+     # Determine median filter size (2 mm kernel in voxels)
      filter_size = np.round((np.ones(3)*2)/resampled_nifti.header.get_zooms()).astype(int)
      logging.info(f"Median Filter Size: {filter_size}")
      
@@ -44,11 +48,13 @@ def test_MedianFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get
      with log_duration(f"GPU median filter ({computing_backend['type']})"):
          data_median_filter_gpu = MedianFilter.MedianFilter(CT_data,filter_size,GPUBackend=computing_backend['type'])
      describe_array('GPU output', data_median_filter_gpu)
+     logging.info("Getting CPU truth (scipy ndimage.median_filter)")
      data_median_filter_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                                lambda: ndimage.median_filter(CT_data,filter_size),
                                                affine=resampled_nifti.affine,dtype=None)
 
      # Save plot screenshot to be added to html report later
+     logging.info("Saving GPU vs CPU comparison plot for the report")
      request.node.screenshots = []
      plots = [resampled_data,data_median_filter_cpu,data_median_filter_gpu]
      plot_names = ['Resampled Data','CPU Median Filter\nOutput (Truth)', 'GPU Median\n Filter Output']
@@ -58,6 +64,6 @@ def test_MedianFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,get
      # Calculate dice coefficient
      calc_dice_func = compare_data['dice_coefficient']
      dice_coeff = calc_dice_func(data_median_filter_gpu,data_median_filter_cpu)
-     logging.info(f"Dice coefficient: {dice_coeff}")
+     logging.info(f"Checking GPU vs CPU dice coefficient > 0.99: {dice_coeff}")
 
      assert dice_coeff > 0.99, f"Dice coefficient is less than 0.99 ({dice_coeff})"

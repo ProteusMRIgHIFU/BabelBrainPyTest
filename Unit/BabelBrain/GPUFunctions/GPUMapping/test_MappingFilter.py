@@ -23,11 +23,15 @@ def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
         'Output_Truth': input_folder + f"CT_cpu_mapping_spatial_step_{spatial_step_text}.nii.gz"
     }
 
+    logging.info("Testing GPU mapping of T1W bone values to unique-value indices")
+
     # Initialize GPU Backend
     gpu_device = get_gpu_device
+    logging.info(f"Initializing MappingFilter on {computing_backend['type']} (device {gpu_device})")
     MappingFilter.InitMapFilter(gpu_device,computing_backend['type'])
 
     # Load inputs
+    logging.info("Loading T1W and final_tissues and resampling them to the spatial step")
     input_data = load_files(input_files)
 
     # Get resampled inputs for specified spatial step
@@ -37,7 +41,8 @@ def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     resampled_data_1 = resampled_data_1.astype(np.float32)
     resampled_data_2 = resampled_data_2.astype(np.float32)
 
-    # Create bone mask
+    # Create bone mask (label 7 is bone in SimNIBS final_tissues)
+    logging.info("Building bone mask from final_tissues")
     SelBone = (resampled_data_2==7)
     logging.info(f"SelBone shape: {SelBone.shape}")
     logging.info(f"Resampled T1W shape: {resampled_data_1.shape}")
@@ -57,9 +62,11 @@ def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
         data_map_cpu=np.zeros(resampled_data_1.shape,np.uint32)
         data_map_cpu[SelBone]=np.searchsorted(UniqueHU,resampled_data_1[SelBone])
         return data_map_cpu
+    logging.info("Getting CPU truth (sorted lookup into UniqueHU)")
     data_map_cpu = cached_cpu_truth(output_fnames['Output_Truth'],map_on_cpu,affine=resampled_nifti_1.affine)
 
     # Save plot screenshot to be added to html report later
+    logging.info("Saving GPU vs CPU comparison plot for the report")
     request.node.screenshots = []
     plots = [resampled_data_1,SelBone,data_map_cpu,data_map_gpu]
     plot_names = ['Resampled Data', 'Bone Mask', 'CPU Map\nOutput (Truth)', 'GPU Map\nOutput']
@@ -69,5 +76,6 @@ def test_MappingFilter_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     # Calculate dice coefficient
     calc_dice_func = compare_data['dice_coefficient']
     dice_coeff = calc_dice_func(data_map_gpu,data_map_cpu)
+    logging.info(f"Checking GPU vs CPU mapping dice coefficient > 0.99: {dice_coeff}")
 
     assert dice_coeff > 0.99, f"Dice coefficient is less than 0.99 ({dice_coeff})"

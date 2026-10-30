@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from glob import glob
@@ -17,11 +18,13 @@ def test_generate_valid_outputs(qtbot,monkeypatch,request,image_to_base64,check_
 
     request.node.screenshots = []
     case = pipeline_case
+    logging.info(f"Case {case.case_id}: generating outputs in <gen_output_folder>/{case.case_id}")
     if rh.saved_outputs_reusable('', case):
         pytest.skip(f"Outputs already generated in {rh.case_output_dir('', case)}")
 
     outdir = rh.ensure_case_outputs(qtbot, monkeypatch, '', case, request.node.screenshots, image_to_base64)
 
+    logging.info(f"Deleting intermediate files from {outdir}")
     for pattern in INTERMEDIATE_FILES:
         for f in glob(os.path.join(str(outdir), pattern)):
             if os.path.isfile(f):

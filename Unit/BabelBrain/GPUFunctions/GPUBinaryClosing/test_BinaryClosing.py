@@ -33,11 +33,15 @@ def test_BinaryClosing_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
         'Output_Truth': input_folder + f"CT_cpu_binary_closing_spatial_step_{spatial_step_text}.nii.gz"
     }
 
+    logging.info("Testing GPU binary closing of the CT bone mask against scipy")
+
     # Initialize GPU Backend
     gpu_device = get_gpu_device
+    logging.info(f"Initializing BinaryClosing on {computing_backend['type']} (device {gpu_device})")
     BinaryClosing.InitBinaryClosing(gpu_device,computing_backend['type'])
 
     # Load inputs
+    logging.info("Loading CT and resampling it to the spatial step")
     input_data = load_files(input_fnames)
 
     # Get resampled input for specified spatial step
@@ -46,10 +50,11 @@ def test_BinaryClosing_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     # Create bone mask
     HUCapThreshold = 2100.0
     HUThreshold = 300.0
+    logging.info(f"Building bone mask: HU capped at {HUCapThreshold}, bone above {HUThreshold}")
     resampled_data[resampled_data>HUCapThreshold] = HUCapThreshold
     bone_mask = resampled_data > HUThreshold
 
-    # Determine binary closing filter size
+    # Determine binary closing filter size (5 mm box in voxels)
     filter_size = np.round((np.ones(3)*5)/resampled_nifti.header.get_zooms()).astype(int)
     logging.info(f"Binary Closing Filter Size: {filter_size}")
 
@@ -58,11 +63,13 @@ def test_BinaryClosing_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     with log_duration(f"GPU binary closing ({computing_backend['type']})"):
         data_binary_closing_gpu = BinaryClosing.BinaryClose(bone_mask, structure=np.ones(filter_size,dtype=int), GPUBackend=computing_backend['type'])
     describe_array('GPU output', data_binary_closing_gpu)
+    logging.info("Getting CPU truth (separable scipy binary closing)")
     data_binary_closing_cpu = cached_cpu_truth(output_fnames['Output_Truth'],
                                                lambda: binary_closing_box(bone_mask,filter_size),
                                                affine=resampled_nifti.affine)
 
     # Save plot screenshot to be added to html report later
+    logging.info("Saving GPU vs CPU comparison plot for the report")
     request.node.screenshots = []
     plots = [resampled_data,bone_mask,data_binary_closing_cpu,data_binary_closing_gpu]
     plot_names = ['Resampled Data', 'Bone Mask', 'CPU Binary Closing\nOutput (Truth)', 'GPU Binary\nClosing Output']
@@ -72,5 +79,6 @@ def test_BinaryClosing_vs_CPU(computing_backend,dataset,spatial_step,check_os,ge
     # Calculate dice coefficient
     calc_dice_func = compare_data['dice_coefficient']
     dice_coeff = calc_dice_func(data_binary_closing_gpu,data_binary_closing_cpu)
+    logging.info(f"Checking GPU vs CPU binary closing dice coefficient > 0.99: {dice_coeff}")
 
     assert dice_coeff > 0.99, f"Dice coefficient is less than 0.99 ({dice_coeff})"
