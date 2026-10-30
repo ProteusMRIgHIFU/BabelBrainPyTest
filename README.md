@@ -467,19 +467,61 @@ What each set contains:
 
 Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report.
 
-The regression tests in [Regression](Regression) generate their outputs first (`test_generate_*`, marked `generate_outputs`) and then compare them against `<ref_output_folder_1>/<suite>/<case id>`, so a failed comparison never throws away a finished simulation.
-
-References are generated with the **reference BabelBrain version** listed in Table 1 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), not the current repo. To create them, check out that version, point `gen_output_folder` at the reference location and run:
-
-```bash
-pytest Tests/Regression -m generate_outputs
-```
-
-If a case has no reference, the reference from another backend is used; if there is none at all, the test is **skipped**, not failed (e.g. a new regression test before its references exist).
+The regression tests compare against reference outputs that have to be generated beforehand, see [Regression tests and reference outputs](#regression-tests-and-reference-outputs).
 
 The parameters of each regression test (one entry per row of Table 10: dataset, trajectory, target, scan types, transducers, profiles, ...) are in `REGRESSION_CASES` in [parameters.py](helpers/parameters.py); change a row there and the regression cases and the consistency checks follow. `regression_test_full_pipeline` and `regression_test_full_pipeline_intensive` use the basic and intensive configurations, `BASIC_PARAMS` and `INTENSIVE_SIM_PARAMS`, so they're edited there and the `basic_babelbrain_params` / `intensive_babelbrain_params` markers follow too. `regression_test_full_pipeline_soft_tissue` uses `SOFT_TISSUE_SIM_PARAMS` (`QUICK_SIM_PARAMS` with soft tissue segmentation; needs SimNIBS). `regression_test_GetSkullMaskFromSimbNIBSSTL` runs Step 1 for every scan type on `QUICK_SIM_PARAMS` with ID_0082 (ernie has no CT, ZTE, PETRA or Density scans). The E2E tests that run a parameter set, `e2e_test_remote_full_pipeline`, `e2e_test_multipoint_full_pipeline`, `e2e_test_combined_trajectories_full_pipeline` and `e2e_test_vtk_visualization_full_pipeline` (Table 9), are in `E2E_CASES` and use `REMOTE_SIM_PARAMS`, `MULTIPOINT_SIM_PARAMS`, `COMBINED_TRAJECTORIES_SIM_PARAMS` and `VTK_VISUALIZATION_SIM_PARAMS`, all built on the quick configuration `QUICK_SIM_PARAMS`. [test_suite_consistency.py](Consistency/test_suite_consistency.py) checks that every dataset, target, scan type, transducer/frequency and input file a regression or E2E case names exists.
 
 Tests for features an older BabelBrain version doesn't have (remote servers, custom transducers, PlanTUS) are skipped automatically.
+
+## Regression tests and reference outputs
+
+A regression test compares outputs of the BabelBrain version being released with **reference outputs** made earlier with the **reference BabelBrain version** (Table 1 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)). The references aren't made during the release run: generate them first, on the release machine.
+
+### 1. Generate the reference outputs (once per reference version and machine)
+
+1. In the BabelBrain checkout, check out the reference version (`git checkout <reference tag or commit>`). `Tests/` is git-ignored, so it stays on the current test suite; tests for features the reference version doesn't have are skipped.
+2. In `Tests/config.ini`, point `gen_output_folder` at the reference location, e.g. `.../Generated_Outputs/v0.8.1`.
+3. Generate every regression case, one process per case:
+
+    ```bash
+    python Tests/scripts/isolate_pytest.py --run -- Tests/Regression -m generate_outputs
+    ```
+
+4. Check out the version being released again, set `ref_output_folder_1` to the reference location and set `gen_output_folder` back to a folder for the new outputs.
+
+Each case is saved in `<folder>/<suite>/<case id>/`, e.g. `regression_full_pipeline/ernie_brainsight_CT-NONE_Superficial_Target_Left_H317_Freq-250kHz_Metal/`. Generate the references on every backend the release is tested on (see the pitfalls below).
+
+### 2. Run the regression tests
+
+```bash
+python Tests/scripts/isolate_pytest.py --run -- Tests/Regression -m "major_release"
+```
+
+Every regression test comes in two halves, both selected by `major_release`:
+
+- **`test_generate_<name>`** (marked `generate_outputs`) runs the pipeline for a case and saves its outputs in `<gen_output_folder>/<suite>/<case id>/`. Only once the run succeeds does it write `pytest_case_complete.yaml` there, recording the BabelBrain version and commit and a hash of the trajectory and profile files.
+- **`test_<name>`** looks up the case's reference, gets the case's outputs and compares them:
+  1. The reference is `<ref_output_folder_1>/<suite>/<case id>/`. Without one, the same case from another backend is used (with a warning in the log); without any, the test is **skipped**, before anything is run.
+  2. The outputs saved by `test_generate_<name>` are reused (see below), otherwise the case is run now.
+  3. Outputs must match **exactly** (0 tolerance). The full pipeline tests compare the thermal outputs (`.h5`); `regression_test_GetSkullMaskFromSimbNIBSSTL` compares every NIfTI, npy, stl and h5 output of Step 1 (not the execution times or the completion marker). Differences are listed in the log and shown in the html report.
+
+Because the outputs are saved before anything is compared, a failed comparison never throws away a finished simulation.
+
+### Saved outputs are reused
+
+A case's saved outputs are reused, by the other half of the test, by later pytest processes (each case is its own process under isolate_pytest.py) and by later sessions, when its `pytest_case_complete.yaml` shows:
+
+- the same BabelBrain commit (the current `git rev-parse HEAD`, with `-dirty` added when BabelBrain has uncommitted changes), and
+- the same trajectory and profile files.
+
+Otherwise the case folder is deleted and the case is run again. A folder without `pytest_case_complete.yaml` is a run that crashed halfway, and is rerun too. Set `BABEL_PYTEST_REGENERATE=1` to rerun every case regardless.
+
+### Pitfalls
+
+- **Generate references for each backend.** When a backend has no reference, another backend's is used, but CUDA, OpenCL and Metal results usually differ slightly, which fails at 0 tolerance and looks like a regression. Generate the references for every backend you test on (on each machine) so the fallback isn't needed.
+- **The reference version isn't checked.** The references' `pytest_case_complete.yaml` records the BabelBrain version that made them, but the tests don't compare it with Table 1: whatever is in `ref_output_folder_1` is used. Check the folder holds the right version.
+- **Uncommitted BabelBrain changes.** With uncommitted changes the commit is recorded as `<commit>-dirty`, which doesn't change when you edit BabelBrain again without committing, so outdated outputs would be reused. Use `BABEL_PYTEST_REGENERATE=1` while changing BabelBrain, and run release tests on a committed version.
+- **Changing a regression case changes its case ids.** A change to `REGRESSION_CASES` (another transducer, dataset, ...) changes the case ids, so the existing references no longer match and those tests are skipped until references are generated for the new cases.
 
 # Isolating a pytest run (crash and memory triage)
 

@@ -1118,7 +1118,7 @@ The intent is not necessarily to test every permutation, but to cover each major
 
 ### 4.4 Regression Tests
 
-Regression testing for a major release should provide broader coverage than for a minor release. Any parameters not specified under the Parameter Combination assume default values. Reference outputs are generated with the reference BabelBrain version in Table 1.
+Regression testing for a major release should provide broader coverage than for a minor release. Any parameters not specified under the Parameter Combination assume default values. Reference outputs are generated with the reference BabelBrain version in Table 1, before the release run and for every backend the release is tested on; see [Regression tests and reference outputs](README.md#regression-tests-and-reference-outputs) in the README for how to generate them, how the tests use them and the pitfalls.
 
 <br>
 
