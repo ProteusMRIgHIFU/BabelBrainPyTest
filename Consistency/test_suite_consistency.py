@@ -176,5 +176,8 @@ def test_optional_test_inputs_exist():
     logging.info(f"Checking the {len(optional)} optional input file(s) exist (missing ones skip their tests)")
     missing = [f for f in optional if not os.path.exists(f)]
     if missing:
-        pytest.skip(f"{len(missing)} optional inputs are missing, the tests using them are skipped:\n"
-                    + "\n".join(missing))
+        # One file per log line: a skip reason is shown on a single line, with any \n escaped
+        logging.warning(f"{len(missing)} optional input(s) missing, the tests using them are skipped:")
+        for f in missing:
+            logging.warning(f"  {f}")
+        pytest.skip(f"{len(missing)} optional inputs are missing (listed in the log), the tests using them are skipped")
