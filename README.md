@@ -5,10 +5,9 @@ How to set up, run and extend the BabelBrain tests. There are two documents:
 - **README.md** (this file): setup, layout, and how to run each kind of test.
 - **[BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)**: the release test plan, i.e. which tests and parameter combinations minor and major releases require (Tables 1 to 10).
 
-All commands below are run from the top level BabelBrain folder (the one holding `pytest.ini`).
+Run every command below from the top level BabelBrain folder, and pass `Tests` (or a path under it) to pytest, e.g. `pytest Tests -m "gpu"`. Pytest then uses [Tests/pytest.ini](pytest.ini) (command line options, live logging, the html report, the required plugins and the markers). A bare `pytest` with no path only finds a `pytest.ini` in the top level folder, which isn't the test suite's.
 
 **Contents**
-- [Quick start](#quick-start)
 - [Setup](#setup)
 - [Test suite layout](#test-suite-layout)
 - [Running tests](#running-tests)
@@ -19,58 +18,49 @@ All commands below are run from the top level BabelBrain folder (the one holding
 - [Isolating a pytest run (crash and memory triage)](#isolating-a-pytest-run-crash-and-memory-triage)
 - [Writing tests](#writing-tests)
 
-# Quick start
-
-1. Create `Tests/config.ini` by copying [example_config.ini](example_config.ini) and updating its entries (see [config.ini](#configini)), e.g.
-
-    ```ini
-    [Paths]
-    data_folder_path = /Users/spichardo/Documents/TempForSim/
-    ref_output_folder_1 = /Users/spichardo/Documents/BabelBrainRegression/Generated_Outputs/v0.8.1
-    ref_output_folder_2 = /Users/spichardo/Documents/BabelBrainRegression/Generated_Outputs/v0.8.8
-    gen_output_folder = /Users/spichardo/Documents/BabelBrainRegression/Generated_Outputs/new
-    [GPU]
-    device_name = M3
-    ```
-
-2. Check the test parameters still match BabelBrain and the test data is in place (no GPU needed, a few seconds):
-
-    ```bash
-    pytest Tests/Consistency
-    ```
-
-3. Run the release test set with the `minor_release` or `major_release` marker (see [Release testing](#release-testing)). For a minor release (replace Metal with your machine's backend):
-
-    ```bash
-    pytest -m "minor_release" -k "not gpu or Metal"
-    ```
-
-    For a major release, run the unit tests and consistency checks directly, and the full pipeline E2E and regression tests through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which runs each test in its own pytest process:
-
-    ```bash
-    pytest Tests/Unit Tests/Consistency -m "major_release"
-    python Tests/scripts/isolate_pytest.py --run -- Tests/E2E Tests/Regression -m "major_release"
-    ```
-
-    Add `--collect-only` to the pytest command (or leave out `--run`) to see what a selection contains without running it.
-
 # Setup
 
-## Packages
+## 1. BabelBrain environment
 
-The tests need pytest and these plugins (they are listed under `required_plugins` in `pytest.ini`):
+The tests import BabelBrain and run it in process, so they run in the same conda environment as BabelBrain. Create it from the environment file for your platform in the BabelBrain repo (e.g. `environment_mac_arm64-314.yml`, `environment_win-314-NoHash.yml`, `environment_linux.yml`) and activate it:
+
+```bash
+conda env create -f environment_mac_arm64-314.yml
+conda activate BabelP314
+```
+
+Check that BabelBrain itself starts (`python BabelBrain/BabelBrain.py`) and that your GPU backend (CUDA, OpenCL or Metal) is available in its computing engine list before running GPU or full pipeline tests.
+
+## 2. Test suite
+
+The tests are a separate git repository, cloned into a folder named `Tests` in the BabelBrain checkout under test (BabelBrain's `.gitignore` ignores it):
+
+```bash
+cd <BabelBrain checkout>
+git clone <BabelBrain pytest repository URL> Tests
+```
+
+To test another BabelBrain version, check that version out in the BabelBrain checkout; the tests read transducers, frequencies and options from whatever is checked out, and skip tests for features it doesn't have.
+
+## 3. Packages
+
+The tests need pytest and these plugins (they are listed under `required_plugins` in [pytest.ini](pytest.ini), and pytest stops if one is missing):
 
 - pytest-html (html test reports)
 - pytest-metadata
 - pytest-qt (driving the Qt GUI)
 
+The macOS and Windows environment files already include them. Otherwise install them into the environment:
+
 ```bash
 pip install pytest pytest-html pytest-metadata pytest-qt
 ```
 
+Everything else the tests import (numpy, nibabel, SimpleITK, trimesh, vtk, h5py, PIL, yaml, psutil, ...) comes with the BabelBrain environment.
+
 Optional packages:
 
-- pytest-xdist (parallel test runs; avoid for GPU tests)
+- pytest-xdist (parallel test runs; disabled in `pytest.ini`, avoid for GPU tests)
 - pytest-benchmark (code performance)
 - pytest-profiling (finding bottlenecks)
 - pytest-sugar (more readable output)
@@ -79,7 +69,15 @@ Optional packages:
 pip install pytest-xdist pytest-benchmark pytest-profiling pytest-sugar
 ```
 
-## config.ini
+## 4. Optional external programs
+
+Tests needing these are skipped, not failed, when they're missing:
+
+- **SimNIBS** (set `simnibs_root_path`, below): soft tissue segmentation regression cases and the PlanTUS integration test.
+- **Blender**: the `blender` variants of the DoIntersect unit tests (trimesh must find the Blender executable). The `manifold` variants need nothing extra.
+- **openssl** on the `PATH`: the TLS cases of the remote server tests.
+
+## 5. config.ini
 
 Tests read user-specific paths and the GPU device from `Tests/config.ini`, which is untracked. Copy [example_config.ini](example_config.ini) to `config.ini` and update it:
 
@@ -102,12 +100,15 @@ host = <server address>
 - `ref_output_folder_1` contains previously generated BabelBrain outputs used as the reference in regression tests.
 - `ref_output_folder_2` contains a second set of generated outputs, for comparing two output folders with each other.
 - `gen_output_folder` is where generated outputs are stored (generate_outputs and regression tests).
+- `device_name` picks the GPU when a backend lists several: the first computing engine whose name contains it (e.g. `M3`, `A6000`), otherwise the backend's first device.
 - `simnibs_root_path` is the SimNIBS install folder (the one containing `simnibs_env`). Only the soft tissue segmentation regression cases and the PlanTUS integration test need it; they are skipped without it.
 - The optional `[Remote]` section points the remote server E2E test at an existing BabelBrain job server; without it the test starts a local one.
 
-## Test data
+Every `[Paths]` entry except `simnibs_root_path`, and `device_name`, must be present even if the tests you run don't use it (point unused ones at any folder): the file is read when the tests are collected.
 
-`data_folder_path` should have the structure below. The test data isn't shared yet, so you need to create your own to run the tests.
+## 6. Test data
+
+`data_folder_path` should have the structure below.
 
 <pre>
 BabelBrain_Test_Data/
@@ -128,9 +129,26 @@ BabelBrain_Test_Data/
       └── &lt;type&gt;_&lt;dataset&gt;_deep_targets.txt         (combined, .yaml for slicer)
 </pre>
 
-`<type>` is brainsight, slicer or localite (.xml). The GPU unit tests also use a small synthetic head that is generated automatically (see [synthetic_dataset.py](helpers/synthetic_dataset.py)), so it doesn't need to be in the data folder. The thermal profiles used by the tests are in this repo's [Profiles](Profiles) folder; the multipoint profile comes from BabelBrain's own `Profiles` folder.
+> **Note:** ID_0082 is a private dataset and isn't shared. ernie is public: it's the example dataset on SimNIBS' [Example Dataset page](https://simnibs.github.io/simnibs/build/html/dataset.html). The trajectory files aren't shared either, so create your own for each dataset you use.
 
-Datasets, targets, profiles and the release test matrix are defined in [parameters.py](helpers/parameters.py). Transducers, their frequencies and the drop-down options are read from the BabelBrain checkout under test, so new ones are picked up automatically. `pytest Tests/Consistency` checks that the test parameters still match BabelBrain and that the test data is in place.
+`<type>` is brainsight, slicer or localite (.xml). For ernie, run `charm ernie <T1> <T2>` on the example dataset's scans and copy the resulting `m2m_ernie` folder (keep the whole charm output; PlanTUS needs `final_tissues.nii.gz` and `eeg_positions/` next to the mesh). The GPU unit tests and most VTK viewer and PlanTUS unit tests use a small synthetic head instead, generated automatically (see [synthetic_dataset.py](helpers/synthetic_dataset.py)) into the gitignored `Tests/.cache` folder, so they don't need the data folder. The thermal profiles used by the tests are in this repo's [Profiles](Profiles) folder; the multipoint profile comes from BabelBrain's own `Profiles` folder.
+
+Datasets, targets, profiles and the release test matrix are defined in [parameters.py](helpers/parameters.py). Transducers, their frequencies and the drop-down options are read from the BabelBrain checkout under test, so new ones are picked up automatically.
+
+## 7. Check the setup
+
+```bash
+# test parameters still match BabelBrain, and the test data is in place (no GPU, a few seconds)
+pytest Tests/Consistency
+
+# unit tests that need no test data or GPU
+pytest Tests/Unit -m "not real_data and not slow and not gpu"
+
+# your GPU backend works (replace Metal with CUDA or OpenCL)
+pytest Tests/Unit -m "gpu and low_res" -k "synthetic and Metal"
+```
+
+`test_optional_test_inputs_exist` is skipped, listing the missing files in the log, when inputs only some tests need are missing; those tests are skipped too.
 
 # Test suite layout
 
@@ -200,28 +218,28 @@ Types of tests:
 
 ## In a terminal
 
-Running `pytest` from the top level BabelBrain folder discovers and runs **all** tests, configured by `pytest.ini`. An html report is written to `PyTest_Reports/` and renamed with the time the run finished.
+Running `pytest Tests` from the top level BabelBrain folder discovers and runs **all** tests, configured by [pytest.ini](pytest.ini). An html report is written to `PyTest_Reports/` and renamed with the time the run finished.
 
 Select tests by name with `-k` and by marker with `-m`:
 
 ```bash
 # All tests in test_FileManager.py
-pytest -k "test_FileManager.py"
+pytest Tests -k "test_FileManager.py"
 
 # Tests whose id contains generate_hash OR nibabel
-pytest -k "generate_hash or nibabel"
+pytest Tests -k "generate_hash or nibabel"
 
 # Tests whose id contains both test_full_pipeline_normal AND Metal
-pytest -k "test_full_pipeline_normal and Metal"
+pytest Tests -k "test_full_pipeline_normal and Metal"
 
 # Tests with the gpu marker but not the slow one
-pytest -m "gpu and not slow"
+pytest Tests -m "gpu and not slow"
 ```
 
 The markers are listed in [pytest.ini](pytest.ini). Add `--collect-only` to see which tests are selected without running them:
 
 ```bash
-pytest -m "basic_babelbrain_params" --collect-only
+pytest Tests -m "basic_babelbrain_params" --collect-only
 ```
 
 See the [pytest documentation](https://docs.pytest.org/en/stable/how-to/usage.html) for other options.
@@ -259,7 +277,7 @@ To see less, raise the level for one run (`pytest -o log_cli_level=WARNING ...`)
 Run a unit test by its name. For example, after changing `generate_hash` in FileManager.py,
 
 ```bash
-pytest -k "test_generate_hash"
+pytest Tests -k "test_generate_hash"
 ```
 
 runs `test_generate_hash`, `test_generate_hash_file_not_found` and `test_generate_hash_read_error`. To run the tests of every function in FileManager.py:
@@ -281,17 +299,17 @@ pytest "Tests/Unit/BabelBrain/test_FileManager.py::TestFileManager::test_nibabel
 Unit tests that read the real datasets (ID_0082, ernie) get the `real_data` marker automatically. Add `-m "not real_data"` to run only the unit tests that use data they generate themselves (e.g. the synthetic head), which is quicker and needs no test data:
 
 ```bash
-pytest -k "unit" -m "not real_data"           # unit tests without real data
-pytest -k "unit"                              # all unit tests
-pytest -k "unit" -m "real_data"               # only the unit tests using real data
-pytest -k "unit" -m "gpu and not real_data"   # combined with other markers
+pytest Tests/Unit -m "not real_data"         # unit tests without real data
+pytest Tests/Unit                            # all unit tests
+pytest Tests/Unit -m "real_data"             # only the unit tests using real data
+pytest Tests/Unit -m "gpu and not real_data" # combined with other markers
 ```
 
 Only unit tests are marked: E2E, regression and generate_outputs tests always use the real datasets.
 
 ## GPU unit tests
 
-GPU unit tests have the `gpu` marker and are parametrized by computing backend and spatial step:
+GPU unit tests have the `gpu` marker and are parametrized by computing backend (CUDA, OpenCL and Metal; backends your operating system doesn't support are skipped) and spatial step:
 
 - low_res
 - medium_res
@@ -302,8 +320,8 @@ Every spatial step runs on the real datasets (ID_0082, ernie) and on a small syn
 
 ```bash
 pytest Tests/Unit -m "gpu and not slow" -k "synthetic and Metal"   # quick check on your machine's backend
-pytest -k "unit" -m "gpu"                                          # all GPU unit tests
-pytest -k "unit" -m "gpu and not slow"                             # without high_res and stress_res
+pytest Tests/Unit -m "gpu"                                         # all GPU unit tests
+pytest Tests/Unit -m "gpu and not slow"                           # without high_res and stress_res
 pytest Tests/Unit -k "ID_0082-High_Res and Metal"                  # one dataset and resolution
 ```
 
@@ -314,7 +332,7 @@ Each GPU test's report entry shows the inputs, the CPU and GPU outputs and a |GP
 Unit tests for the functions each BabelBrain step calls are marked `step1`, `step2` and `step3`:
 
 ```bash
-pytest -k "unit" -m "step1"
+pytest Tests/Unit -m "step1"
 ```
 
 # End-to-end tests
@@ -327,12 +345,12 @@ End-to-end tests run the full BabelBrain pipeline. They are parametrized by the 
 - Dataset: ID_0082, ernie
 - Transducer: Single, CTX_500, ...
 - Frequency: depends on the transducer
-- Computing backend: CUDA, OpenCL, Metal, MLX
+- Computing backend: CUDA, OpenCL, Metal (MLX isn't tested until BabelBrain fully supports it)
 
 That is over 100,000 versions of one full pipeline test, so narrow the selection down. Either name the parameters:
 
 ```bash
-pytest -k "test_full_pipeline_normal and slicer and Deep_Target_Left and ernie and NONE and Single and 200kHz and CUDA"
+pytest Tests -k "test_full_pipeline_normal and slicer and Deep_Target_Left and ernie and NONE and Single and 200kHz and CUDA"
 ```
 
 or use one of the configuration markers below.
@@ -352,7 +370,7 @@ It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The ma
 The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_SIM_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration. Multipoint focusing is tested by the E2E test `e2e_test_multipoint_full_pipeline` instead, on the quick configuration (`QUICK_SIM_PARAMS`: ernie, MRI only, superficial target) with H317 at 250 kHz, since multipoint profiles need a phased array.
 
 ```bash
-pytest -k "test_full_pipeline_normal" -m "intensive_babelbrain_params"
+pytest Tests -k "test_full_pipeline_normal" -m "intensive_babelbrain_params"
 ```
 
 The other `*_babelbrain_params` markers choose their transducers and frequencies with `MARKER_TRANSDUCERS` in the same file. These configurations are for checking a change by hand; releases are tested with the `minor_release` / `major_release` markers (see [Release testing](#release-testing)).
@@ -362,7 +380,7 @@ The other `*_babelbrain_params` markers choose their transducers and frequencies
 Checks that BabelBrain runs to completion without errors. It saves plots but doesn't check outputs, so review the results to verify they make sense visually.
 
 ```bash
-pytest -k "test_full_pipeline_normal" -m "basic_babelbrain_params"
+pytest Tests -k "test_full_pipeline_normal" -m "basic_babelbrain_params"
 ```
 
 ## test_full_pipeline_regression_normal
@@ -378,7 +396,7 @@ ref_output_folder_1 = /<User>/BabelBrain_Unit_Testing/Generated_Outputs/BabelBra
 then run
 
 ```bash
-pytest -k "test_full_pipeline_regression_normal" -m "basic_babelbrain_params"
+pytest Tests -k "test_full_pipeline_regression_normal" -m "basic_babelbrain_params"
 ```
 
 Outputs are compared with 0 tolerance, so any difference from the reference fails the test and shows up in the report.
@@ -397,10 +415,10 @@ ref_output_folder_2 = /<User>/BabelBrain_Unit_Testing/Generated_Outputs/MLX
 then run
 
 ```bash
-pytest -k "test_full_pipeline_two_outputs"
+pytest Tests -k "test_full_pipeline_two_outputs"
 ```
 
-Tolerances are selected as above. There is no `basic_babelbrain_params` marker here: it applies when generating the outputs beforehand.
+Outputs are compared with 0 tolerance, as above. There is no `basic_babelbrain_params` marker here: it applies when generating the outputs beforehand.
 
 The html report has one section per compared subfolder (parameter set/device), each showing the reference and test file paths. For each mismatched 3D field it embeds a slice viewer (reference, test and difference side by side, with a fixed colour scale across slices). Each viewer samples up to 24 slices spread evenly across the volume, to keep the report size reasonable. Mismatched single values (e.g. scalar summary metrics) are listed in a table with their reference and test values and absolute and relative differences.
 
@@ -421,7 +439,7 @@ gen_output_folder = /<user>/BabelBrain_Unit_Testing/Generated_Outputs/BabelBrain
 (or `.../Metal` for outputs using only the Metal backend, `.../Cupy_v13_6` for a newer cupy version, ...), then run
 
 ```bash
-pytest -k "test_generate_valid_outputs" -m "basic_babelbrain_params"
+pytest Tests -k "test_generate_valid_outputs" -m "basic_babelbrain_params"
 ```
 
 Each case is saved in `<gen_output_folder>/<case id>` together with a `pytest_case_complete.yaml` marker written once the run succeeded. A later run skips cases already generated by the same BabelBrain commit with the same trajectory and profile files, and reruns (from an empty folder) anything else, including folders from a run that crashed halfway. Set `BABEL_PYTEST_REGENERATE=1` to rerun every case.
@@ -432,17 +450,19 @@ The tests required for minor and major releases are described in [BabelBrain_Pyt
 
 ```bash
 # minor release set on this machine's backend
-pytest -m "minor_release" -k "not gpu or Metal"
+pytest Tests -m "minor_release" -k "not gpu or Metal"
 
 # major release set: unit tests and consistency checks directly, full pipeline tests one per process
 pytest Tests/Unit Tests/Consistency -m "major_release"
 python Tests/scripts/isolate_pytest.py --run -- Tests/E2E Tests/Regression -m "major_release"
 ```
 
+Add `--collect-only` to the pytest command (or leave out `--run`, which only writes the per-case runner script) to see what a selection contains without running it.
+
 What each set contains:
 
-- **Unit tests and consistency checks** (marked automatically): GPU unit tests run the synthetic head at every resolution in both sets, and the real datasets at one resolution only: low_res for minor releases and medium_res for major releases (`RELEASE_SPATIAL_STEPS` in [parameters.py](helpers/parameters.py)). Every other unit test and the consistency checks are in the major set, and in the minor set too unless they're slow. The DoIntersect tests on the real datasets (`TestDoIntersectRealData`) are slow, so only major releases run them; minor releases run `TestDoIntersectSynthetic`.
-- **E2E and regression tests**: [E2E/test_e2e_release.py](E2E/test_e2e_release.py) (Table 9) and [Regression/test_regression_release.py](Regression/test_regression_release.py) (Table 10) are marked `major_release`. The minor release E2E and regression tables (Tables 5 and 6) don't list any tests yet, so the minor set has none.
+- **Unit tests and consistency checks** (marked automatically): GPU unit tests run the synthetic head at every resolution in both sets, and the real datasets only in the major set, at medium_res (`RELEASE_SPATIAL_STEPS` in [parameters.py](helpers/parameters.py)). Every other unit test and the consistency checks are in the major set, and in the minor set too unless they're slow or read the real datasets, so minor releases need no test data. The DoIntersect tests on the real datasets (`TestDoIntersectRealData`) are slow, so only major releases run them; minor releases run `TestDoIntersectSynthetic`.
+- **E2E and regression tests**: [E2E/test_e2e_release.py](E2E/test_e2e_release.py) (Table 9) and [Regression/test_regression_release.py](Regression/test_regression_release.py) (Table 10) are marked `major_release`. For a minor release, run only the E2E tests of the features the release affects (Table 5), selected from test_e2e_release.py by name, e.g. `pytest Tests/E2E -k "vtk_visualization and Metal"`. Regression tests aren't run for minor releases (Table 6).
 
 Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report.
 
@@ -527,6 +547,6 @@ def test_subtraction():
     assert 2 - 1 == 1, "message shown if assertion fails"
 ```
 
-Put the file where [Test suite layout](#test-suite-layout) says, and register any new marker in both `pytest.ini` files. Tests that ask for the `dataset`, `transducer`, `computing_backend`, `spatial_step`, ... fixtures are parametrized over them automatically ([collection.py](helpers/collection.py)); parametrize one yourself with `@pytest.mark.parametrize` to narrow it.
+Put the file where [Test suite layout](#test-suite-layout) says, and register any new marker in [pytest.ini](pytest.ini). Tests that ask for the `dataset`, `transducer`, `computing_backend`, `spatial_step`, ... fixtures are parametrized over them automatically ([collection.py](helpers/collection.py)); parametrize one yourself with `@pytest.mark.parametrize` to narrow it.
 
 For more on pytest, see the [pytest documentation](https://docs.pytest.org/en/stable/).

@@ -213,7 +213,7 @@ COMPUTING_BACKENDS = [
     {'type': 'OpenCL', 'supported_os': ['Windows', 'Linux']},
     {'type': 'CUDA',   'supported_os': ['Windows', 'Linux']},
     {'type': 'Metal',  'supported_os': ['Mac']},
-    {'type': 'MLX',    'supported_os': ['Mac']},
+    # {'type': 'MLX',    'supported_os': ['Mac']}, # MLX isn't fully supported yet (not in the BabelBrain environments), add it back once it is
 ]
 RELEASE_BACKENDS = ['CUDA', 'OpenCL', 'Metal']  # backends in the release test matrix
 

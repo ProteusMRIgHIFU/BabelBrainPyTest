@@ -349,7 +349,7 @@ The goal is to use a **small but representative set of parameter combinations**.
 
 ### 3.1 Unit Tests
 
-Unit tests should focus primarily on code affected by the release.
+Unit tests should focus primarily on code affected by the release. Minor release unit tests need no test data: the unit tests that read the real datasets (ID_0082, ernie) or are slow are only run for major releases (Table 7).
 
 <br>
 
@@ -378,15 +378,10 @@ Unit tests should focus primarily on code affected by the release.
         </ul>
       </td>
     </tr>
-    <!-- test_FileManager.py (all tests: hashing, nibabel/SimpleITK conversion, check_reuse_files) -->
+    <!-- test_FileManager.py (hashing, wait_for_file, check_reuse_files) -->
     <tr>
-      <td>test_FileManager.py (all tests: hashing, nibabel/SimpleITK conversion, check_reuse_files)</td>
+      <td>test_FileManager.py (hashing, wait_for_file, check_reuse_files)</td>
       <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>ID_0082</li>
-          <li>ernie</li>
-        </ul>
         <b>CT Type (check_reuse_files tests):</b><br>
         <ul>
           <li>All</li>
@@ -396,22 +391,6 @@ Unit tests should focus primarily on code affected by the release.
         <ul>
           <li>Hash-based caching decides whether Step 1 outputs are reused, a regression here silently reuses stale results</li>
           <li>No GPU needed</li>
-        </ul>
-      </td>
-    </tr>
-    <!-- test_save_T1W_iso -->
-    <tr>
-      <td>test_save_T1W_iso</td>
-      <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>ID_0082</li>
-          <li>ernie</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Isotropic T1W is the starting point of Step 1</li>
         </ul>
       </td>
     </tr>
@@ -435,23 +414,6 @@ Unit tests should focus primarily on code affected by the release.
         </ul>
       </td>
     </tr>
-    <!-- test_SaveNiftiEnforcedISO -->
-    <tr>
-      <td>test_SaveNiftiEnforcedISO</td>
-      <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>ID_0082</li>
-          <li>ernie</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Isotropic resampling used by the transcranial modeling</li>
-          <li>Skipped on BabelBrain versions before babel_integration_helpers existed</li>
-        </ul>
-      </td>
-    </tr>
     <!-- test_BinaryClosing_vs_CPU -->
     <tr>
       <td>test_BinaryClosing_vs_CPU<br>test_LabelImage_vs_CPU<br>test_MappingFilter_vs_CPU<br>test_MedianFilter_vs_CPU<br>test_Resample_vs_CPU<br>test_Voxelize_vs_CPU</td>
@@ -463,15 +425,37 @@ Unit tests should focus primarily on code affected by the release.
         <b>Test dataset / Spatial Step:</b><br>
         <ul>
           <li>synthetic (small generated head, see synthetic_dataset.py): Low_Res, Med_Res, High_Res, Stress_Res</li>
-          <li>ID_0082: Low_Res</li>
-          <li>ernie: Low_Res (tests needing a CT or T1W.nii.gz in the dataset folder are skipped)</li>
         </ul>
       </td>
       <td>
         <ul>
           <li>Catches GPU kernel regressions against CPU (scipy/scikit-image/trimesh) reference outputs</li>
-          <li>The small synthetic head covers every resolution quickly; the full head datasets run at the cheapest resolution (RELEASE_SPATIAL_STEPS in parameters.py)</li>
+          <li>The small synthetic head covers every resolution quickly and needs no test data; the full head datasets are only run for major releases (RELEASE_SPATIAL_STEPS in parameters.py)</li>
           <li>CPU references are cached after the first run</li>
+        </ul>
+      </td>
+    </tr>
+    <!-- test_RunPlanTUS.py (all tests) -->
+    <tr>
+      <td>test_RunPlanTUS.py (all tests)</td>
+      <td>
+        <b>Test dataset:</b><br>
+        <ul>
+          <li>synthetic (T1 of the synthetic head, trajectories made for it)</li>
+        </ul>
+        <b>Transducer/Frequency:</b><br>
+        <ul>
+          <li>CTX_500/500kHz</li>
+        </ul>
+        <b>Trajectory:</b><br>
+        <ul>
+          <li>Brainsight and Slicer, single and combined targets</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>BabelBrain's side of PlanTUS without running it: PlanTUSTxConfig.yaml (has every key PlanTUS_wrapper.py requires), target mask, PlanTUS command line, recalculate/reload prompt, success/error reporting, and the accepted PlanTUS trajectory written back as the _PlanTUS file</li>
+          <li>No SimNIBS, GPU or test data needed, runs in seconds</li>
         </ul>
       </td>
     </tr>
@@ -524,7 +508,7 @@ Unit tests should focus primarily on code affected by the release.
 Where practical, all unit tests should still be run because they are generally fast.
 
 ```bash
-pytest -m "minor_release" -k "not gpu or Metal"
+pytest Tests/Unit Tests/Consistency -m "minor_release" -k "not gpu or Metal"
 ```
 
 (replace Metal with the backend of the release machine)
@@ -604,7 +588,7 @@ Only representative combinations are required unless the release changes the int
 
 ### 3.3 End-to-End Tests
 
-E2E testing should verify at least the main user workflow.
+E2E testing for a minor release only covers the features affected by the release, as with the integration tests. Pick the E2E tests for those features from Table 9 (Major Release End-to-End Tests) and run them on the backend of the release machine.
 
 <br>
 
@@ -620,11 +604,16 @@ E2E testing should verify at least the main user workflow.
     </tr>
   </thead>
   <tbody>
-    <!-- &lt;e2e_test_1&gt; -->
+    <!-- affected features -->
     <tr>
-      <td>&lt;e2e_test_1&gt;</td>
-      <td>&lt;parameter_combination&gt;</td>
-      <td>&lt;reason&gt;</td>
+      <td>E2E tests of the features affected by the release (from Table 9)</td>
+      <td>The parameter combination listed for each test in Table 9, on the backend of the release machine</td>
+      <td>
+        <ul>
+          <li>Checks the full workflow of each changed feature</li>
+          <li>Features the release doesn't affect are covered by the next major release</li>
+        </ul>
+      </td>
     </tr>
   </tbody>
 </table>
@@ -633,11 +622,11 @@ E2E testing should verify at least the main user workflow.
 
 <br>
 
-Minor releases generally do not require every supported E2E configuration.
+If the release doesn't affect any feature with an E2E test, no E2E tests are needed.
 
 ### 3.4 Regression Tests
 
-Regression testing should focus on common configurations, changed functionality, and previously identified failure cases.
+Regression tests are not run for minor releases. Outputs are compared against the reference BabelBrain version in major releases only (Table 10).
 
 <br>
 
@@ -653,11 +642,11 @@ Regression testing should focus on common configurations, changed functionality,
     </tr>
   </thead>
   <tbody>
-    <!-- &lt;regression_test_1&gt; -->
+    <!-- none -->
     <tr>
-      <td>&lt;regression_test_1&gt;</td>
-      <td>&lt;parameter_combination&gt;</td>
-      <td>&lt;reason&gt;</td>
+      <td>None</td>
+      <td>&ndash;</td>
+      <td>Regression tests are only run for major releases (Table 10)</td>
     </tr>
   </tbody>
 </table>
@@ -674,7 +663,7 @@ The goal is to test **multiple representative configurations across supported ex
 
 ### 4.1 Unit Tests
 
-All applicable unit tests should normally be run.
+Major releases run every minor release unit test (Table 3), on every GPU backend instead of only the release machine's, plus the tests below, which need the real datasets or are slow.
 
 <br>
 
@@ -690,37 +679,20 @@ All applicable unit tests should normally be run.
     </tr>
   </thead>
   <tbody>
-    <!-- test_suite_consistency.py (all tests) -->
+    <!-- test_FileManager.py (nibabel/SimpleITK conversion) -->
     <tr>
-      <td>test_suite_consistency.py (all tests)</td>
-      <td>
-        None (no GPU or test data needed)
-      </td>
-      <td>
-        <ul>
-          <li>Confirms the test parameters still match the BabelBrain version under test (transducers, frequencies, GUI options, custom transducer templates) and that the test data is in place</li>
-          <li>Runs in seconds, run it first</li>
-        </ul>
-      </td>
-    </tr>
-    <!-- test_FileManager.py (all tests: hashing, nibabel/SimpleITK conversion, check_reuse_files) -->
-    <tr>
-      <td>test_FileManager.py (all tests: hashing, nibabel/SimpleITK conversion, check_reuse_files)</td>
+      <td>test_FileManager.py (nibabel/SimpleITK conversion: test_nibabel_to_sitk, test_sitk_to_nibabel and their _and_back round trips)</td>
       <td>
         <b>Test dataset:</b><br>
         <ul>
           <li>ID_0082</li>
           <li>ernie</li>
         </ul>
-        <b>CT Type (check_reuse_files tests):</b><br>
-        <ul>
-          <li>All</li>
-        </ul>
       </td>
       <td>
         <ul>
-          <li>Hash-based caching decides whether Step 1 outputs are reused, a regression here silently reuses stale results</li>
-          <li>No GPU needed</li>
+          <li>Conversions BabelBrain uses when loading the real T1W and CT scans</li>
+          <li>Need the real datasets, so they're only run for major releases</li>
         </ul>
       </td>
     </tr>
@@ -740,23 +712,20 @@ All applicable unit tests should normally be run.
         </ul>
       </td>
     </tr>
-    <!-- TestDoIntersectSynthetic -->
+    <!-- test_SaveNiftiEnforcedISO -->
     <tr>
-      <td>TestDoIntersectSynthetic (test_BabelDatasetPreps.py)</td>
+      <td>test_SaveNiftiEnforcedISO</td>
       <td>
-        None (spheres, boxes and cones built in the test)<br>
-        <b>Boolean engine:</b><br>
+        <b>Test dataset:</b><br>
         <ul>
-          <li>manifold (default)</li>
-          <li>blender (skipped when Blender isn't installed)</li>
+          <li>ID_0082</li>
+          <li>ernie</li>
         </ul>
       </td>
       <td>
         <ul>
-          <li>DoIntersect cuts the skin with the transducer cone and skin/bone/CSF with the FOV box in Step 1</li>
-          <li>Intersection volumes are checked against analytic values (overlapping spheres, spherical sector), plus contained/disjoint cases and the mesh-repair paths (multi-body and open meshes)</li>
-          <li>Every test runs for both engines. Blender variants also show Blender's own result (boolean modifier evaluated in Blender) and save the scene to PyTest_Reports/blender_scenes/ (real-data scenes only with BABEL_PYTEST_SAVE_BLENDER_SCENES=1). If trimesh's Blender booleans return empty meshes, Blender tests that expect an intersection fail with that reason; non-overlapping cases always run</li>
-          <li>Runs in seconds</li>
+          <li>Isotropic resampling used by the transcranial modeling</li>
+          <li>Skipped on BabelBrain versions before babel_integration_helpers existed</li>
         </ul>
       </td>
     </tr>
@@ -793,23 +762,6 @@ All applicable unit tests should normally be run.
         </ul>
       </td>
     </tr>
-    <!-- test_SaveNiftiEnforcedISO -->
-    <tr>
-      <td>test_SaveNiftiEnforcedISO</td>
-      <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>ID_0082</li>
-          <li>ernie</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>Isotropic resampling used by the transcranial modeling</li>
-          <li>Skipped on BabelBrain versions before babel_integration_helpers existed</li>
-        </ul>
-      </td>
-    </tr>
     <!-- test_BinaryClosing_vs_CPU -->
     <tr>
       <td>test_BinaryClosing_vs_CPU<br>test_LabelImage_vs_CPU<br>test_MappingFilter_vs_CPU<br>test_MedianFilter_vs_CPU<br>test_Resample_vs_CPU<br>test_Voxelize_vs_CPU</td>
@@ -819,11 +771,10 @@ All applicable unit tests should normally be run.
           <li>CUDA</li>
           <li>OpenCL</li>
           <li>Metal</li>
-          <li>MLX</li>
         </ul>
         <b>Test dataset / Spatial Step:</b><br>
         <ul>
-          <li>synthetic: Low_Res, Med_Res, High_Res, Stress_Res</li>
+          <li>synthetic: Low_Res, Med_Res, High_Res, Stress_Res (as in Table 3, but on every backend)</li>
           <li>ID_0082: Med_Res</li>
           <li>ernie: Med_Res (tests needing a CT or T1W.nii.gz in the dataset folder are skipped)</li>
         </ul>
@@ -832,69 +783,6 @@ All applicable unit tests should normally be run.
         <ul>
           <li>Covers every GPU backend and resolution, higher resolutions exercise large arrays and memory limits</li>
           <li>All resolutions run on the small synthetic head, the full head datasets only at Med_Res as their high resolutions take very long (RELEASE_SPATIAL_STEPS in parameters.py; the other real dataset resolutions are still available as unit tests)</li>
-        </ul>
-      </td>
-    </tr>
-    <!-- test_RunPlanTUS.py (all tests) -->
-    <tr>
-      <td>test_RunPlanTUS.py (all tests)</td>
-      <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>synthetic (T1 of the synthetic head, trajectories made for it)</li>
-        </ul>
-        <b>Transducer/Frequency:</b><br>
-        <ul>
-          <li>CTX_500/500kHz</li>
-        </ul>
-        <b>Trajectory:</b><br>
-        <ul>
-          <li>Brainsight and Slicer, single and combined targets</li>
-        </ul>
-      </td>
-      <td>
-        <ul>
-          <li>BabelBrain's side of PlanTUS without running it: PlanTUSTxConfig.yaml (has every key PlanTUS_wrapper.py requires), target mask, PlanTUS command line, recalculate/reload prompt, success/error reporting, and the accepted PlanTUS trajectory written back as the _PlanTUS file</li>
-          <li>No SimNIBS, GPU or test data needed, runs in seconds</li>
-        </ul>
-      </td>
-    </tr>
-    <!-- test_nifti_viewer.py (all tests) -->
-    <tr>
-      <td>test_nifti_viewer.py (all tests)</td>
-      <td>
-        <b>Test dataset:</b><br>
-        <ul>
-          <li>Small block volumes (geometry, loading, navigation, layer controls)</li>
-          <li>synthetic (tissue mask, T1W and CT of the synthetic head, rendered)</li>
-        </ul>
-        <b>View modes:</b><br>
-        <ul>
-          <li>Affine, medical radiological, medical neurological</li>
-        </ul>
-        No GPU or test data needed
-      </td>
-      <td>
-        <ul>
-          <li>VTK visualization window (GUIComponents/nifti_viewer.py): affine/RAS geometry, NIfTI loading, colour maps and cutoff, slice navigation in affine and medical modes, layer controls, overlay removal, window/level reset, screenshots, one viewer per trajectory</li>
-          <li>Synthetic head rendered through the viewer tab's toolbar (view modes, neurological flip, crosshairs, RAS boxes, reset, Screenshot button), with screenshots of every view in the report</li>
-          <li>Crosshair drawn when the target is on the middle slices, medical slice grid centre with partial voxel extents</li>
-          <li>Tissue label colours are a strict xfail: the label table is applied over the mask's data range, so the labels show the wrong colours</li>
-          <li>Skipped on BabelBrain versions without the VTK viewer</li>
-        </ul>
-      </td>
-    </tr>
-    <!-- test_RemoteServers.py, test_client_functions.py, test_server.py (all tests) -->
-    <tr>
-      <td>test_RemoteServers.py<br>test_client_functions.py<br>test_server.py<br>(all tests)</td>
-      <td>
-        None (no network, GPU or test data needed; TLS certificates are made with openssl)
-      </td>
-      <td>
-        <ul>
-          <li>Remote server settings: saved server list, URLs, bearer token headers, client TLS settings (trusted CA, insecure, mutual TLS)</li>
-          <li>Server side: HTTPS / mutual TLS context, loopback detection, refusing to start on a network address without a token or with a bad certificate, upload names can't leave their workspace, job spec validation</li>
-          <li>Skipped on BabelBrain versions without remote servers</li>
         </ul>
       </td>
     </tr>
@@ -908,7 +796,7 @@ All applicable unit tests should normally be run.
 Important parameterized unit tests should cover representative values, boundary cases, and known failure cases.
 
 ```bash
-pytest -m "major_release"
+pytest Tests/Unit Tests/Consistency -m "major_release"
 ```
 
 ### 4.2 Integration Tests
@@ -1427,13 +1315,13 @@ Major releases should include known regression cases and representative coverage
     <!-- E2E -->
     <tr>
       <td>E2E</td>
-      <td>Main workflow and key alternate path</td>
+      <td>Only the features affected by the release</td>
       <td>Multiple representative supported workflows</td>
     </tr>
     <!-- Regression -->
     <tr>
       <td>Regression</td>
-      <td>Default, changed, and known failure configurations</td>
+      <td>Not run</td>
       <td>Broad representative coverage and known regression cases</td>
     </tr>
   </tbody>
