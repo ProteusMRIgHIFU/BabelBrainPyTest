@@ -253,7 +253,11 @@ def run_plantus_headless(monkeypatch, plantus_args, runOnlyTrajectory=-1):
             i = args.index('--placement_only')
             args[i:i + 2] = [f'--placement_only={args[i + 1]}']
         args.append('--skip_viewer')
+        # Live logging (log_cli in pytest.ini) suspends and resumes pytest's output capture, which
+        # puts pytest's own sys.stdout back over BabelBrain's redirect to the queue
+        redirect = sys.stdout
         logging.info(f"Running {' '.join(map(str, args))}")
+        sys.stdout = redirect
         return real_run(args, **kwargs)
 
     out = queue.Queue()
