@@ -250,11 +250,22 @@ def select_computing_engine(sf, backend, remote_server_name=None):
     combo.setCurrentIndex(wanted[0])
 
 
+# Former names of renamed transducers, used when the BabelBrain version under test predates the rename
+FORMER_TRANSDUCER_NAMES = {'TheraPhas': ['REMOPD']}
+
+
 def select_transducer(sf, name, is_custom=False):
     if is_custom:
         from GUIComponents.custom_transducer_dialog import CUSTOM_TRANSDUCER_PREFIX
         name = CUSTOM_TRANSDUCER_PREFIX + name
     index = sf.ui.TransducerTypecomboBox.findText(name)
+    for former in FORMER_TRANSDUCER_NAMES.get(name, []):
+        if index >= 0:
+            break
+        # Older BabelBrain versions (e.g. the reference version) list the transducer by its old name
+        index = sf.ui.TransducerTypecomboBox.findText(former)
+        if index >= 0:
+            logging.info(f"Transducer {name} is called {former} in this BabelBrain version")
     if index < 0:
         available = [sf.ui.TransducerTypecomboBox.itemText(i) for i in range(sf.ui.TransducerTypecomboBox.count())]
         pytest.fail(f"Transducer {name} not found in transducer list: {available}")
