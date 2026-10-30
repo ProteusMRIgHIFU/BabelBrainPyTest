@@ -586,6 +586,10 @@ Integration testing should cover the primary interactions affected by the releas
 
 Only representative combinations are required unless the release changes the interaction between specific components.
 
+```bash
+pytest Tests/Integration -m "minor_release"
+```
+
 ### 3.3 End-to-End Tests
 
 E2E testing for a minor release only covers the features affected by the release, as with the integration tests. Pick the E2E tests for those features from Table 9 (Major Release End-to-End Tests) and run them on the backend of the release machine.
@@ -892,6 +896,10 @@ Integration testing should cover the major supported component interactions.
 <br>
 
 Additional combinations should be included when parameter interactions are likely to affect component behavior.
+
+```bash
+pytest Tests/Integration -m "major_release"
+```
 
 ### 4.3 End-to-End Tests
 
@@ -1259,19 +1267,19 @@ Regression testing for a major release should provide broader coverage than for 
         </ul>
         <b>Transducer/Frequency/Trajectory:</b>
         <ul>
-          <li>Single/500kHz/Superficial</li>
-          <li>Single/250kHz/Superficial</li>
+          <li>CTX_500/500kHz/Superficial</li>
         </ul>
-        <b>Advanced Options – Step 1 soft tissue segmentation:</b>
+        <b>Pipeline:</b>
         <ul>
-          <li>Enabled</li>
-          <li>Disabled</li>
+          <li>Step 1 only</li>
         </ul>
       </td>
       <td>
         <ul>
-          <li>Tests different CT types</li>
+          <li>Tests Step 1's skull mask for every CT type, on the quick configuration (QUICK_SIM_PARAMS) with ID_0082 instead of ernie, which has no CT, ZTE, PETRA or Density scans</li>
+          <li>Soft tissue segmentation isn't varied here, regression_test_full_pipeline_soft_tissue covers it</li>
           <li>Compare all generated output files</li>
+          <li>15 total tests (CT types the dataset doesn't have are skipped)</li>
         </ul>
       </td>
     </tr>

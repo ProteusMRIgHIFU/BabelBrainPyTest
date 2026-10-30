@@ -347,17 +347,14 @@ REGRESSION_CASES = {
     'regression_test_full_pipeline': BASIC_PARAMS,
     'regression_test_full_pipeline_intensive': INTENSIVE_SIM_PARAMS,
     'regression_test_full_pipeline_soft_tissue': SOFT_TISSUE_SIM_PARAMS,
+    # Step 1 skull mask for every scan type on the quick configuration. ID_0082 instead of ernie,
+    # which has no CT/ZTE/PETRA/Density scans; soft tissue segmentation is covered by
+    # regression_test_full_pipeline_soft_tissue
     'regression_test_GetSkullMaskFromSimbNIBSSTL': {
+        **QUICK_SIM_PARAMS,
         'dataset': 'ID_0082',
-        'trajectory_type': 'brainsight',
-        'target': DEFAULT_TARGET,
         'ct_types': list(CT_TYPES),     # every scan type the GUI offers
-        'transducers': [('Single', 500), ('Single', 250)],
-        'thermal_profile': DEFAULT_THERMAL_PROFILE,
-        'multipoint_profile': None,
-        'soft_tissue_segmentation': [False, True],
         'last_step': 1,
-        'backends': RELEASE_BACKENDS,
         'require_ct_files': False,
     },
 }
