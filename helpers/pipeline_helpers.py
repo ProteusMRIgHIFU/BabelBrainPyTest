@@ -52,6 +52,7 @@ from Tests.helpers.parameters import (BABELBRAIN_ROOT, COREGISTRATION, CT_TYPE_F
                               THERMAL_PROFILES_DIR, TRAJECTORY_TYPES,
                               gen_output_dir, gpu_device, ref_output_dir,
                               simnibs_root_path, trajectory_file)
+from Tests.helpers.plots import volume_diff_viewer
 
 # ================================================================================================================================
 # SETTINGS
@@ -731,11 +732,35 @@ def _compare_arrays(a, b, tolerance):
     return ok, f"max abs diff {np.nanmax(diff) if diff.size else 0:.6g}, mismatched voxels {int(np.sum(~np.isclose(a64, b64, rtol=tolerance, atol=0, equal_nan=True)))}"
 
 
+def _add_diff_viewer(ref, test, label, tolerance, screenshots, max_frames=24):
+    """Slider viewer of the reference, test and |test - ref| of a mismatched volume, showing the
+    slices (along the first axis) that hold the most mismatched voxels."""
+    if ref.ndim != 3 or ref.shape != test.shape or not np.issubdtype(ref.dtype, np.number):
+        return
+    ref = ref.astype(np.float64)
+    test = test.astype(np.float64)
+    diff = np.abs(test - ref)
+    mismatched = ~np.isclose(ref, test, rtol=tolerance, atol=0, equal_nan=True)
+    per_slice = mismatched.sum(axis=(1, 2))
+    slices = np.sort(np.argsort(per_slice)[::-1][:min(max_frames, int(np.count_nonzero(per_slice)))])
+    if slices.size == 0:
+        return
+    viewer_html = volume_diff_viewer(ref, test, diff, title=f'{label}  Tol={tolerance}', dlabel='',
+                                     diff_unit='abs diff', slices=slices, mark_voxels=mismatched)
+    screenshots.append({'kind': 'html', 'html': (
+        f"<div><strong>{label}</strong> &mdash; {int(mismatched.sum())} mismatched voxel(s) in {int(np.count_nonzero(per_slice))} "
+        f"slice(s); the slider shows the {slices.size} slice(s) with the most</div>{viewer_html}")})
+
+
 def _compare_file(ref, test, tolerance, screenshots, compare_data):
     if ref.endswith('.h5'):
         return compare_data['h5_data'](ref, test, screenshots, tolerance=tolerance, label=os.path.basename(ref)), 'see h5 table'
     if ref.endswith('.npy'):
-        return _compare_arrays(np.load(ref), np.load(test), tolerance)
+        ref_arr, test_arr = np.load(ref), np.load(test)
+        ok, detail = _compare_arrays(ref_arr, test_arr, tolerance)
+        if not ok:
+            _add_diff_viewer(ref_arr, test_arr, os.path.basename(ref), tolerance, screenshots)
+        return ok, detail
     if ref.endswith('.stl'):
         ref_mesh, test_mesh = trimesh.load(ref), trimesh.load(test)
         if len(ref_mesh.vertices) != len(test_mesh.vertices) and tolerance == 0:
@@ -746,7 +771,11 @@ def _compare_file(ref, test, tolerance, screenshots, compare_data):
     ref_nii, test_nii = nibabel.load(ref), nibabel.load(test)
     if not np.allclose(ref_nii.affine, test_nii.affine, rtol=1e-5, atol=1e-5):
         return False, "affines differ"
-    return _compare_arrays(np.asanyarray(ref_nii.dataobj), np.asanyarray(test_nii.dataobj), tolerance)
+    ref_arr, test_arr = np.asanyarray(ref_nii.dataobj), np.asanyarray(test_nii.dataobj)
+    ok, detail = _compare_arrays(ref_arr, test_arr, tolerance)
+    if not ok:
+        _add_diff_viewer(ref_arr, test_arr, os.path.basename(ref), tolerance, screenshots)
+    return ok, detail
 
 
 def compare_all_outputs(ref_folder, test_folder, tolerance, screenshots, compare_data):

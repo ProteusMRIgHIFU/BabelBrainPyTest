@@ -103,13 +103,19 @@ def gpu_vs_cpu_plot(plots,titles,cpu_output,gpu_output,color_map='gray'):
                     zero_based=[False]*len(plots) + [True])
 
 
-def volume_diff_viewer(vol1,vol2,diff_vol,title,dlabel,unit='',diff_unit=None,max_frames=24):
-    """Html slider viewer of reference, test and difference slices along the first axis."""
+def volume_diff_viewer(vol1,vol2,diff_vol,title,dlabel,unit='',diff_unit=None,max_frames=24,slices=None,
+                       mark_voxels=None):
+    """Html slider viewer of reference, test and difference slices along the first axis
+    (`slices` picks the slice indices, else max_frames evenly spaced ones). Voxels where the
+    boolean volume `mark_voxels` is True are circled on every panel, so isolated single voxel
+    differences stay visible."""
     if diff_unit is None:
         diff_unit = f'Diff{dlabel}'
     nz = vol1.shape[0]
-    n_frames = min(nz, max_frames)
-    frame_indices = np.unique(np.linspace(0, nz - 1, n_frames).astype(int))
+    if slices is None:
+        n_frames = min(nz, max_frames)
+        slices = np.linspace(0, nz - 1, n_frames)
+    frame_indices = np.unique(np.asarray(slices).astype(int))
 
     vmin=min(np.nanmin(vol1),np.nanmin(vol2))
     vmax=max(np.nanmax(vol1),np.nanmax(vol2))
@@ -136,6 +142,8 @@ def volume_diff_viewer(vol1,vol2,diff_vol,title,dlabel,unit='',diff_unit=None,ma
         ax.set_xlabel('X (voxels)')
         ax.set_ylabel('Y (voxels)')
         images.append(im)
+    markers = [ax.scatter([], [], s=40, facecolors='none', edgecolors='red', linewidths=0.8) for ax in axs] \
+        if mark_voxels is not None else []
     suptitle=fig.suptitle(f'{title}\nSlice {frame_indices[0]+1}/{nz}')
     plt.tight_layout()
 
@@ -143,6 +151,10 @@ def volume_diff_viewer(vol1,vol2,diff_vol,title,dlabel,unit='',diff_unit=None,ma
     for z in frame_indices:
         for im, vol in zip(images, (vol1, vol2, diff_vol)):
             im.set_data(vol[z])
+        if markers:
+            rows, cols = np.nonzero(mark_voxels[z])
+            for marker in markers:
+                marker.set_offsets(np.column_stack((cols, rows)) if rows.size else np.empty((0, 2)))
         suptitle.set_text(f'{title}\nSlice {z+1}/{nz}')
         frames_b64.append(_webp_b64(fig))
     plt.close(fig)
