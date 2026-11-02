@@ -254,6 +254,11 @@ def select_computing_engine(sf, backend, remote_server_name=None):
 # Former names of renamed transducers, used when the BabelBrain version under test predates the rename
 FORMER_TRANSDUCER_NAMES = {'TheraPhas': ['REMOPD']}
 
+# Former frequencies (kHz) of transducers whose frequency list changed: the frequency used in the tests ->
+# the one used before. Older BabelBrain versions run at the former frequency, and references generated at
+# it are compared to the new one (TheraPhas: REMOPD at 490 kHz -> TheraPhas at 487 kHz, the closest left)
+FORMER_FREQUENCIES_KHZ = {'TheraPhas': {487: 490}}
+
 
 def select_transducer(sf, name, is_custom=False):
     if is_custom:
@@ -353,6 +358,12 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
 
     # Simulation parameters
     freq_index = bb.Widget.USMaskkHzDropDown.findText(str(case.freq_khz))
+    former_freq = FORMER_FREQUENCIES_KHZ.get(case.transducer, {}).get(case.freq_khz)
+    if freq_index < 0 and former_freq is not None:
+        # Older BabelBrain versions (e.g. the reference version) only have the former frequency
+        freq_index = bb.Widget.USMaskkHzDropDown.findText(str(former_freq))
+        if freq_index >= 0:
+            logging.info(f"{case.transducer} has no {case.freq_khz} kHz in this BabelBrain version, using {former_freq} kHz")
     if freq_index < 0:
         available = [bb.Widget.USMaskkHzDropDown.itemText(i) for i in range(bb.Widget.USMaskkHzDropDown.count())]
         pytest.fail(f"{case.freq_khz} kHz is not available for {case.transducer}: {available}")
@@ -654,12 +665,20 @@ def ensure_case_outputs(qtbot, monkeypatch, suite, case, screenshots=None, image
 
 
 def find_reference_dir(suite, case):
-    """Reference outputs for `case`: same case id, else the same case from another backend."""
+    """Reference outputs for `case`: same case id, else the same case at its former frequency
+    (FORMER_FREQUENCIES_KHZ), else the same case from another backend."""
     suite_dir = Path(ref_output_dir) / suite
     exact = suite_dir / case.case_id
     if exact.is_dir():
         logging.info(f"Reference outputs: {exact}")
         return exact
+    former_freq = FORMER_FREQUENCIES_KHZ.get(case.transducer, {}).get(case.freq_khz)
+    if former_freq is not None:
+        former = suite_dir / replace(case, freq_khz=former_freq).case_id
+        if former.is_dir():
+            logging.warning(f"No {case.freq_khz} kHz reference for {case.case_id}, comparing with the "
+                            f"{former_freq} kHz reference {former.name}")
+            return former
     for backend in RELEASE_BACKENDS + ['MLX']:
         if backend == case.backend:
             continue

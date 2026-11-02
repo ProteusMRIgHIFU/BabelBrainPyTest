@@ -979,7 +979,7 @@ Major releases should exercise the main supported workflows across representativ
           <li>simple_focused → Single/500kHz</li>
           <li>flat_annular_array → H246/500kHz</li>
           <li>focused_annular_array → CTX_500/500kHz</li>
-          <li>flat_array_2D → TheraPhas/490kHz</li>
+          <li>flat_array_2D → TheraPhas/487kHz</li>
           <li>focused_array → H317/250kHz</li>
         </ul>
         <b>Trajectory:</b>
@@ -1157,7 +1157,7 @@ Regression testing for a major release should provide broader coverage than for 
           <li>Single (simple focused type)/500kHz/Superficial</li>
           <li>CTX_500 (focused annular array)/500kHz/Superficial</li>
           <li>H246 (flat annular array)/500kHz/Superficial</li>
-          <li>TheraPhas (flat array 2D)/490kHz/Superficial</li>
+          <li>TheraPhas (flat array 2D)/487kHz/Superficial</li>
           <li>H317 (focused array)/250kHz/Superficial</li>
           <li>DomeTx (focused array)/220kHz/Superficial</li>
         </ul>
