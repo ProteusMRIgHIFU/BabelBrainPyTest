@@ -43,6 +43,24 @@ PLANTUS_PLANNING_OUTPUTS = [
     'skin_skull_angles_skin.func.gii',
 ]
 
+# Modules PlanTUS imports from simnibs_env (PlanTUS README, "Dependencies"), import name -> pip name.
+# SimNIBS doesn't ship them, they have to be pip installed in simnibs_env (PlanTUS v2.0.0 added trimesh and vtk)
+PLANTUS_REQUIRED_MODULES = {'nibabel': 'nibabel', 'nilearn': 'nilearn', 'yaml': 'pyyaml', 'h5py': 'h5py',
+                            'trimesh': 'trimesh', 'vtk': 'vtk'}
+
+def missing_plantus_modules(simnibs_root):
+    """PLANTUS_REQUIRED_MODULES that don't import with the simnibs_env python, as (python, [pip names])."""
+    env = Path(simnibs_root) / 'simnibs_env'
+    python = next((p for p in (env / 'bin' / 'python', env / 'python.exe', env / 'Scripts' / 'python.exe')
+                   if p.is_file()), None)
+    if python is None:
+        return None, list(PLANTUS_REQUIRED_MODULES.values())
+    check = ("import importlib.util\n"
+             f"print(' '.join(m for m in {list(PLANTUS_REQUIRED_MODULES)} if importlib.util.find_spec(m) is None))")
+    result = subprocess.run([str(python), '-c', check], capture_output=True, text=True)
+    return python, [PLANTUS_REQUIRED_MODULES[m] for m in result.stdout.split()]
+
+
 def transducer_config(tx_name):
     """Transducer config as BabelBrain loads it into AcSim.Config (default.yaml of the transducer)."""
     tx = TRANSDUCERS_BY_NAME[tx_name]

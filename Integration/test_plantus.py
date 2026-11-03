@@ -54,6 +54,10 @@ class _QtBot:
 def plantus_run(qapp, tmp_path_factory, module_monkeypatch):
     """PlanTUS run on a copy of the ernie inputs, as BabelBrain starts it (step 1)."""
     simnibs = simnibs_root()
+    python, missing = ph.missing_plantus_modules(simnibs)
+    assert python is not None, f"No python found in {simnibs}/simnibs_env"
+    assert not missing, (f"PlanTUS dependencies missing from simnibs_env: {missing}, install them with\n"
+                         f"  {python} -m pip install {' '.join(missing)}")
     tmp = tmp_path_factory.mktemp('plantus_ernie')
     logging.info(f"Copying the ernie T1, mesh and trajectory into {tmp} (PlanTUS writes next to the mesh)")
     t1, m2m, traj = ph.copy_ernie_inputs(tmp)
