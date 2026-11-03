@@ -9,7 +9,9 @@ from Tests.helpers.logs import describe_array, log_duration
 
 @pytest.mark.step1
 def test_LabelImage_vs_CPU(computing_backend,dataset,spatial_step,check_os,get_gpu_device,load_files,get_resampled_input,cached_cpu_truth,gpu_vs_cpu_plot,compare_data,request):
-        
+    if computing_backend['type'] == 'Metal':
+        pytest.skip("LabelImage is not implemented for Metal (BabelBrain uses the CPU label instead)")
+
     # Parameters
     input_folder = dataset['folder_path']
     input_fnames = {'CT': input_folder + 'CT.nii.gz',}
