@@ -201,7 +201,7 @@ def h5_data(h5_ref_path,h5_test_path,node_screenshots,tolerance=0,label=None,ign
                     else:
                         tolerancepass = data1==data2
                 else:
-                    if np.isdtype(data1.dtype, "unsigned integer"):
+                    if np.issubdtype(data1.dtype, np.unsignedinteger): # np.isdtype needs numpy 2.0+
                         data1 = data1.astype(np.float32)
                         data2 = data2.astype(np.float32)
                     tolerancepass=np.allclose(data1, data2, rtol=tolerance, atol=0, equal_nan=True)
