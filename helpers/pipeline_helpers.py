@@ -354,7 +354,8 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
         bb.Config['bSegmentBrainTissue'] = True
         bb.Config['SimbNINBSRoot'] = simnibs_root()
 
-    redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=case.segment_soft_tissue)
+    redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=case.segment_soft_tissue,
+                                     rename_id=remote_server_name is None)
 
     # Simulation parameters
     freq_index = bb.Widget.USMaskkHzDropDown.findText(str(case.freq_khz))
@@ -377,9 +378,13 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
     return bb
 
 
-def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False):
+def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False, rename_id=True):
     """Copy the inputs BabelBrain writes next to into the output folder, so the test data
-    folder is never modified and every generated file lands in the case folder."""
+    folder is never modified and every generated file lands in the case folder.
+
+    rename_id=False keeps the trajectory ID SelFiles derived. Use it for a remote server: the
+    server derives the ID again from the uploaded trajectory (e.g. the Brainsight target name),
+    names its outputs after that, and the client looks for the downloads under its own ID."""
     logging.info(f"Copying inputs into {output_folder} so the test data folder isn't modified")
     shutil.copy(bb.Config['T1W'], os.path.join(output_folder, os.path.basename(bb.Config['T1W'])))
     if ct_file is not None:
@@ -391,6 +396,12 @@ def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False
     m2m_files = ['final_tissues.nii.gz'] if bb.Config['SimbNIBSType'] == 'charm' else ['skin.nii.gz']
     if copy_mesh:  # soft tissue segmentation reads the charm mesh
         m2m_files += [os.path.basename(f) for f in glob.glob(os.path.join(m2m_src, '*.msh'))]
+    # SelFiles.ValidSimNIBS identifies the folder type by a 'charm'/'headreco' file name.
+    # The copied folder is re-validated in remote mode (the server rebuilds the selection
+    # from the uploaded files), so the log has to come along.
+    log_file = f"{bb.Config['SimbNIBSType']}_log.html"
+    if os.path.isfile(os.path.join(m2m_src, log_file)):
+        m2m_files.append(log_file)
     for fname in m2m_files:
         shutil.copy(os.path.join(m2m_src, fname), os.path.join(m2m_dst, fname))
 
@@ -400,7 +411,9 @@ def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False
     # Config['ID'] is a plain string up to v0.8.x and a list (one entry per trajectory) after
     # the dual-Tx refactor. Keep whatever shape this version uses.
     new_ID = os.path.splitext(os.path.basename(trajectory_new_file))[0]
-    if isinstance(bb.Config['ID'], str):
+    if not rename_id:
+        pass
+    elif isinstance(bb.Config['ID'], str):
         bb.Config['ID'] = new_ID
     else:
         n_traj = len(bb.Config['ID'])
