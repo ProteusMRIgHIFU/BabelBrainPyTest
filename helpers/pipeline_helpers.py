@@ -25,6 +25,7 @@ a marker is a run that died halfway: it is deleted and the case is rerun.
 Reference outputs are looked up in <ref_output_folder_1>/<suite>/<case_id>/,
 falling back to the same case produced with a different computing backend.
 """
+import ctypes
 import datetime
 import glob
 import hashlib
@@ -66,6 +67,12 @@ STEP_TIMEOUTS_MS = {1: 30 * 60 * 1000, 2: 3 * 60 * 60 * 1000, 3: 60 * 60 * 1000}
 # Ignore failures to generate outputs that were already reported this session, so the
 # same broken case isn't rerun for every tolerance/comparison test that needs it
 _SESSION_GENERATION_FAILURES = {}
+
+# Strong references to the windows build_babelbrain creates, released by the release_open_windows fixture once
+# pytest-qt has closed and deleted them. qtbot only keeps weak references, so without these a window can be freed
+# by the garbage collector mid-test while its C++ side is still alive, which segfaults on PySide6 6.4
+# (superqt's QLabeledDoubleRangeSlider in particular)
+OPEN_WINDOWS = []
 
 
 class PipelineError(RuntimeError):
@@ -294,6 +301,23 @@ def validate_selfiles(sf):
         pytest.fail(f"Invalid SelFiles input(s): {', '.join(invalid)}. {sf.msgDetails}")
 
 
+def restore_std_streams(_window=None):
+    """BabelBrain redirects sys.stdout to an OutputWrapper QObject wrapping the previous sys.stdout (so several
+    windows chain), and the wrapper is deleted with its window. Point sys.stdout/sys.stderr, and every wrapper
+    in the chain, back at the real stream so neither later prints nor a wrapper's __del__ (which restores its
+    wrapped stream) leave them on a deleted QObject."""
+    from BabelBrain.BabelBrain import OutputWrapper
+    for name in ('stdout', 'stderr'):
+        stream = getattr(sys, name)
+        wrappers = []
+        while isinstance(stream, OutputWrapper):
+            wrappers.append(stream)
+            stream = stream.__dict__['_stream']
+        for wrapper in wrappers:
+            wrapper._stream = stream
+        setattr(sys, name, stream)
+
+
 def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_server_name=None):
     """Create a BabelBrain widget for `case` that writes everything to `output_folder`."""
     from BabelBrain.BabelBrain import BabelBrain
@@ -341,7 +365,14 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
 
     bb = BabelBrain(sf, AltOutputFilesPath=output_folder)
     bb.show()
-    qtbot.addWidget(bb)
+    qtbot.addWidget(bb, before_close_func=restore_std_streams)
+    OPEN_WINDOWS.extend([sf, bb])
+    # PySide6 6.4 segfaults when Python frees superqt's QLabeledDoubleRangeSlider (while freeing the signal objects
+    # cached in its __dict__), even after its C++ side is deleted. Leak one reference so the ZTE range slider's
+    # wrapper is never freed (a few KB per window)
+    zte_slider = getattr(bb.Widget, 'ZTERangeSlider', None)
+    if zte_slider is not None:
+        ctypes.pythonapi.Py_IncRef(ctypes.py_object(zte_slider))
 
     # Advanced options start from defaults, not from whatever the last GUI session saved
     try:
