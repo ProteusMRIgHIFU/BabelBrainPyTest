@@ -308,7 +308,8 @@ def collect_nodeids(python_exe, pytest_args, cwd):
     print("Collecting cases (collection only, no tests are run):\n  "
           + " ".join(shlex.quote(c) for c in cmd) + "\n", flush=True)
     proc = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          text=True, errors="replace")
+                          env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                          text=True, encoding="utf-8", errors="replace")
     out = proc.stdout
     ids, seen = [], set()
     for line in out.splitlines():
@@ -460,6 +461,9 @@ def run_chunk(idx, total_chunks, nodeids, flags, python_exe, cwd, run_dir, args)
     env = dict(os.environ)
     env["PYTHONFAULTHANDLER"] = "1"   # a segfault then prints the python stack that caused it
     env["PYTHONUNBUFFERED"] = "1"
+    # stdout is a pipe here, so Windows Python would default to cp1252 and die on non-cp1252
+    # output (e.g. histoprint's box-drawing histogram in Step 1, which hangs CT/ZTE cases).
+    env["PYTHONIOENCODING"] = "utf-8"
 
     avail_before, swap_before = sys_mem()
     t0 = time.monotonic()
@@ -477,7 +481,8 @@ def run_chunk(idx, total_chunks, nodeids, flags, python_exe, cwd, run_dir, args)
         log.flush()
 
         proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1)
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                errors="replace", bufsize=1)
 
         last_output = [time.monotonic()]
 
@@ -619,6 +624,7 @@ PYTEST_FLAGS=(@@FLAGS@@)
 
 export PYTHONFAULTHANDLER=1   # turn a segfault into a printable python traceback
 export PYTHONUNBUFFERED=1
+export PYTHONIOENCODING=utf-8 # output goes to a log file; never fall back to a narrow locale codec
 
 mkdir -p "$LOGDIR" "$HTMLDIR"
 echo "index,status,returncode,duration_s,peak_rss_mb,nodeid" > "$SUMMARY"
@@ -691,6 +697,9 @@ set STOP_ON_CRASH=0
 set "PYTEST_FLAGS=@@FLAGS_FLAT@@"
 set PYTHONFAULTHANDLER=1
 set PYTHONUNBUFFERED=1
+REM Output goes to a log file, where Python would otherwise use cp1252 and fail on non-ASCII
+REM text (e.g. the Step 1 histogram), hanging the CT/ZTE cases.
+set PYTHONIOENCODING=utf-8
 set FAILED=0
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
