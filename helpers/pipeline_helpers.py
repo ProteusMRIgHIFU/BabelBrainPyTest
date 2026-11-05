@@ -25,6 +25,7 @@ a marker is a run that died halfway: it is deleted and the case is rerun.
 Reference outputs are looked up in <ref_output_folder_1>/<suite>/<case_id>/,
 falling back to the same case produced with a different computing backend.
 """
+import copy
 import datetime
 import glob
 import hashlib
@@ -348,7 +349,11 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
         from Options.Options import ApplyAdvancedConfig
         ApplyAdvancedConfig(bb.Config, bb._AllTransducers, force=True)
     except ImportError:
-        logging.warning("ApplyAdvancedConfig not available in this BabelBrain version, using saved advanced options")
+        # Before v0.8.2: reset from the defaults BabelBrain built (OptionalParams), as ApplyAdvancedConfig does.
+        # Otherwise saved options leak in (e.g. a TxOptimizedWeights calibration file reweights the source)
+        logging.info("ApplyAdvancedConfig not available in this BabelBrain version, resetting advanced options from OptionalParams")
+        for k in bb._DefaultOptions.keys():
+            bb.Config[k] = copy.deepcopy(getattr(bb._DefaultOptions, k))
     if case.segment_soft_tissue:
         logging.info("Enabling Step 1 soft tissue segmentation")
         bb.Config['bSegmentBrainTissue'] = True
