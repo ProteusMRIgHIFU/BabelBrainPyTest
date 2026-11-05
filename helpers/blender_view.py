@@ -35,7 +35,10 @@ print('BLENDER_RESULT_VERTICES', len(result.data.vertices))
 
 bpy.ops.object.select_all(action='DESELECT')
 result.select_set(True)
-bpy.ops.wm.stl_export(filepath=result_path, export_selected_objects=True)
+try:
+    bpy.ops.wm.stl_export(filepath=result_path, export_selected_objects=True)
+except AttributeError:  # Blender < 4.1 only has the legacy STL exporter
+    bpy.ops.export_mesh.stl(filepath=result_path, use_selection=True)
 if blend_path != 'none':
     bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True)
 '''
@@ -52,10 +55,11 @@ def blender_boolean(mesh1, mesh2, operation='INTERSECT', blend_path=None, timeou
             f.write(SCRIPT)
         if blend_path:
             os.makedirs(os.path.dirname(blend_path), exist_ok=True)
-        run = subprocess.run([blender._blender_executable, '--background', '--factory-startup', '--python', paths[3],
+        run = subprocess.run([blender._blender_executable, '--background', '--factory-startup',
+                              '--python-exit-code', '1', '--python', paths[3],
                               '--', paths[0], paths[1], paths[2], blend_path or 'none', operation],
                              capture_output=True, text=True, timeout=timeout)
-        if 'BLENDER_RESULT_VERTICES' not in run.stdout:
+        if run.returncode != 0 or 'BLENDER_RESULT_VERTICES' not in run.stdout:
             raise RuntimeError(f"Blender script failed:\n{run.stdout[-2000:]}\n{run.stderr[-2000:]}")
         n_vertices = int(run.stdout.split('BLENDER_RESULT_VERTICES')[1].split()[0])
         result = trimesh.load(paths[2], force='mesh') if n_vertices else trimesh.Trimesh()
