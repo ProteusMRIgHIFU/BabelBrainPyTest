@@ -26,6 +26,7 @@ Reference outputs are looked up in <ref_output_folder_1>/<suite>/<case_id>/,
 falling back to the same case produced with a different computing backend.
 """
 import copy
+import ctypes
 import datetime
 import glob
 import hashlib
@@ -67,6 +68,12 @@ STEP_TIMEOUTS_MS = {1: 30 * 60 * 1000, 2: 3 * 60 * 60 * 1000, 3: 60 * 60 * 1000}
 # Ignore failures to generate outputs that were already reported this session, so the
 # same broken case isn't rerun for every tolerance/comparison test that needs it
 _SESSION_GENERATION_FAILURES = {}
+
+# Strong references to the windows build_babelbrain creates, released by the release_open_windows fixture once
+# pytest-qt has closed and deleted them. qtbot only keeps weak references, so without these a window can be freed
+# by the garbage collector mid-test while its C++ side is still alive, which segfaults on PySide6 6.4
+# (superqt's QLabeledDoubleRangeSlider in particular)
+OPEN_WINDOWS = []
 
 
 class PipelineError(RuntimeError):
@@ -295,6 +302,23 @@ def validate_selfiles(sf):
         pytest.fail(f"Invalid SelFiles input(s): {', '.join(invalid)}. {sf.msgDetails}")
 
 
+def restore_std_streams(_window=None):
+    """BabelBrain redirects sys.stdout to an OutputWrapper QObject wrapping the previous sys.stdout (so several
+    windows chain), and the wrapper is deleted with its window. Point sys.stdout/sys.stderr, and every wrapper
+    in the chain, back at the real stream so neither later prints nor a wrapper's __del__ (which restores its
+    wrapped stream) leave them on a deleted QObject."""
+    from BabelBrain.BabelBrain import OutputWrapper
+    for name in ('stdout', 'stderr'):
+        stream = getattr(sys, name)
+        wrappers = []
+        while isinstance(stream, OutputWrapper):
+            wrappers.append(stream)
+            stream = stream.__dict__['_stream']
+        for wrapper in wrappers:
+            wrapper._stream = stream
+        setattr(sys, name, stream)
+
+
 def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_server_name=None):
     """Create a BabelBrain widget for `case` that writes everything to `output_folder`."""
     from BabelBrain.BabelBrain import BabelBrain
@@ -342,7 +366,14 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
 
     bb = BabelBrain(sf, AltOutputFilesPath=output_folder)
     bb.show()
-    qtbot.addWidget(bb)
+    qtbot.addWidget(bb, before_close_func=restore_std_streams)
+    OPEN_WINDOWS.extend([sf, bb])
+    # PySide6 6.4 segfaults when Python frees superqt's QLabeledDoubleRangeSlider (while freeing the signal objects
+    # cached in its __dict__), even after its C++ side is deleted. Leak one reference so the ZTE range slider's
+    # wrapper is never freed (a few KB per window)
+    zte_slider = getattr(bb.Widget, 'ZTERangeSlider', None)
+    if zte_slider is not None:
+        ctypes.pythonapi.Py_IncRef(ctypes.py_object(zte_slider))
 
     # Advanced options start from defaults, not from whatever the last GUI session saved
     try:
@@ -359,7 +390,8 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
         bb.Config['bSegmentBrainTissue'] = True
         bb.Config['SimbNINBSRoot'] = simnibs_root()
 
-    redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=case.segment_soft_tissue)
+    redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=case.segment_soft_tissue,
+                                     rename_id=remote_server_name is None)
 
     # Simulation parameters
     freq_index = bb.Widget.USMaskkHzDropDown.findText(str(case.freq_khz))
@@ -382,9 +414,13 @@ def build_babelbrain(qtbot, case, output_folder, custom_tx_name=None, remote_ser
     return bb
 
 
-def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False):
+def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False, rename_id=True):
     """Copy the inputs BabelBrain writes next to into the output folder, so the test data
-    folder is never modified and every generated file lands in the case folder."""
+    folder is never modified and every generated file lands in the case folder.
+
+    rename_id=False keeps the trajectory ID SelFiles derived. Use it for a remote server: the
+    server derives the ID again from the uploaded trajectory (e.g. the Brainsight target name),
+    names its outputs after that, and the client looks for the downloads under its own ID."""
     logging.info(f"Copying inputs into {output_folder} so the test data folder isn't modified")
     shutil.copy(bb.Config['T1W'], os.path.join(output_folder, os.path.basename(bb.Config['T1W'])))
     if ct_file is not None:
@@ -396,6 +432,12 @@ def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False
     m2m_files = ['final_tissues.nii.gz'] if bb.Config['SimbNIBSType'] == 'charm' else ['skin.nii.gz']
     if copy_mesh:  # soft tissue segmentation reads the charm mesh
         m2m_files += [os.path.basename(f) for f in glob.glob(os.path.join(m2m_src, '*.msh'))]
+    # SelFiles.ValidSimNIBS identifies the folder type by a 'charm'/'headreco' file name.
+    # The copied folder is re-validated in remote mode (the server rebuilds the selection
+    # from the uploaded files), so the log has to come along.
+    log_file = f"{bb.Config['SimbNIBSType']}_log.html"
+    if os.path.isfile(os.path.join(m2m_src, log_file)):
+        m2m_files.append(log_file)
     for fname in m2m_files:
         shutil.copy(os.path.join(m2m_src, fname), os.path.join(m2m_dst, fname))
 
@@ -405,7 +447,9 @@ def redirect_inputs_to_output_folder(bb, output_folder, ct_file, copy_mesh=False
     # Config['ID'] is a plain string up to v0.8.x and a list (one entry per trajectory) after
     # the dual-Tx refactor. Keep whatever shape this version uses.
     new_ID = os.path.splitext(os.path.basename(trajectory_new_file))[0]
-    if isinstance(bb.Config['ID'], str):
+    if not rename_id:
+        pass
+    elif isinstance(bb.Config['ID'], str):
         bb.Config['ID'] = new_ID
     else:
         n_traj = len(bb.Config['ID'])

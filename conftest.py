@@ -5,7 +5,9 @@ comparisons.py, plots.py and report_viewers.py (report entries), pipeline_helper
 BabelBrain), mesh_checks.py, blender_view.py and synthetic_dataset.py.
 """
 import datetime
+import gc
 import logging
+import multiprocessing
 import os
 import platform
 import shutil
@@ -22,6 +24,15 @@ from nibabel import affines, nifti1, processing
 
 sys.path.append('./BabelBrain/')
 np.random.seed(42) # RNG is same every time
+
+# BabelBrain.py only selects 'spawn' under its __main__ guard, so set it here too. With Linux's default
+# 'fork', the step worker processes inherit the CUDA context already initialized in this process and fail
+# with cudaErrorInitializationError
+if sys.platform == 'linux':
+    try:
+        multiprocessing.set_start_method('spawn')
+    except RuntimeError:
+        pass
 from BabelBrain.FileManager import FileManager
 import BabelBrain.BabelBrain as bb_module # Needed to get monkeypatch working
 
@@ -71,6 +82,19 @@ def log_test_progress(request):
     call = getattr(node, 'rep_call', None)
     outcome = call.outcome.upper() if call is not None else 'NOT RUN (setup skipped or failed)'
     logging.info('=' * 30 + f" {outcome} {node.name} in {time.monotonic() - start:.1f} s " + '=' * 30)
+
+
+@pytest.fixture(autouse=True)
+def release_open_windows():
+    """Drop the strong references pipeline_helpers keeps to its BabelBrain windows, only after pytest-qt has
+    closed them and their C++ objects are deleted, so Python never frees a window that Qt still owns."""
+    yield
+    import Tests.helpers.pipeline_helpers as rh
+    if rh.OPEN_WINDOWS:
+        from PySide6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete) # Run the deleteLater() calls from pytest-qt
+        rh.OPEN_WINDOWS.clear()
+        gc.collect() # Free the windows' Python wrappers now, not at interpreter shutdown after the QApplication is gone
 
 
 @pytest.fixture(scope="session", autouse=True)

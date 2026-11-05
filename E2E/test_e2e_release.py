@@ -117,7 +117,9 @@ def remote_server(tmp_path_factory):
         log_file = open(log_path, 'w')
         process = subprocess.Popen([sys.executable, os.path.join('BabelBrain', 'BabelBrain.py'), '--serve', '--headless',
                                     '--serve-host', server['host'], '--serve-port', str(server['port'])],
-                                   cwd=BABELBRAIN_ROOT, stdout=log_file, stderr=subprocess.STDOUT)
+                                   cwd=BABELBRAIN_ROOT, stdout=log_file, stderr=subprocess.STDOUT,
+                                   # Windows: own process group so _stop_server can send it CTRL_BREAK
+                                   creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
         logging.info(f"Started a local headless BabelBrain server on {server['host']}:{server['port']} "
                      f"(log: {log_path})")
 
@@ -150,7 +152,9 @@ def remote_server(tmp_path_factory):
 def _stop_server(process, log_file):
     if process is not None and process.poll() is None:
         logging.info("Stopping the local BabelBrain server")
-        process.send_signal(signal.SIGINT)
+        # Popen.send_signal only accepts SIGTERM/CTRL_C_EVENT/CTRL_BREAK_EVENT on Windows, and
+        # SIGTERM there is TerminateProcess (no cleanup). CTRL_BREAK lets the server shut down.
+        process.send_signal(signal.CTRL_BREAK_EVENT if sys.platform == 'win32' else signal.SIGINT)
         try:
             process.wait(timeout=60)
         except subprocess.TimeoutExpired:
