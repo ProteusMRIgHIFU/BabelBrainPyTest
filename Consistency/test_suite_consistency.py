@@ -1,0 +1,183 @@
+"""
+Checks that the test parameters in helpers/parameters.py still match the BabelBrain checkout and the test
+data, so a new transducer, GUI option or custom transducer template (or a renamed data file) shows
+up as a clear failure here instead of as silently skipped or untested cases.
+
+These need no GPU and run in seconds:
+
+    pytest Tests/Consistency
+"""
+import logging
+import os
+
+import pytest
+import yaml
+
+from Tests.helpers import parameters as P
+
+# ================================================================================================================================
+# APP OPTIONS
+# ================================================================================================================================
+GUI_OPTION_LABELS = {
+    'CTTypecomboBox': P.CT_TYPE_LABELS,
+    'TrajectoryTypecomboBox': P.TRAJECTORY_TYPE_LABELS,
+    'SimbNIBSTypecomboBox': P.SIMNIBS_TYPE_LABELS,
+    'CoregCTcomboBox': P.COREGISTRATION_LABELS,
+}
+
+
+@pytest.mark.parametrize('combo_name', GUI_OPTION_LABELS)
+def test_gui_options_match_test_labels(combo_name):
+    gui_items = P.selfiles_combo_items(combo_name)
+    labels = GUI_OPTION_LABELS[combo_name]
+    logging.info(f"{combo_name}: {len(gui_items)} option(s) in SelFiles/form.ui, {len(labels)} named in parameters.py")
+    logging.info("Checking every GUI option has a test name")
+    assert gui_items, f"{combo_name} not found in SelFiles/form.ui"
+
+    untested = [item for item in gui_items if item not in labels.values()]
+    assert not untested, f"New {combo_name} option(s) {untested} have no test name in parameters.py"
+
+    # Options missing from the app (older version, or removed) just aren't parametrized; a rename
+    # is caught above as an untested option
+    logging.info("Checking every test name is still a GUI option")
+    missing = [label for label in labels.values() if label not in gui_items]
+    if missing:
+        pytest.skip(f"{combo_name} option(s) {missing} are not in BabelBrain {P.BABELBRAIN_VERSION}, "
+                    "tests using them are not generated")
+
+
+# ================================================================================================================================
+# TRANSDUCERS
+# ================================================================================================================================
+def _referenced_transducers():
+    """(where, transducer, kHz) for every transducer/frequency the tests name explicitly."""
+    refs = [(name, tx, f) for name, spec in P.PIPELINE_CASE_SPECS.items() for tx, f in spec['transducers']]
+    refs += [('CUSTOM_TX_EQUIVALENTS', eq['transducer'], eq['freq_khz']) for eq in P.CUSTOM_TX_EQUIVALENTS.values()]
+    for marker, rule in P.MARKER_TRANSDUCERS.items():
+        for tx, freqs in rule['frequencies'].items():
+            refs += [(marker, tx, f) for f in (freqs or [None])]
+    return refs
+
+
+@pytest.mark.parametrize('where,transducer,freq_khz', _referenced_transducers(),
+                         ids=lambda v: str(v))
+def test_referenced_transducers_exist(where, transducer, freq_khz):
+    logging.info(f"Checking {where} names a built-in transducer {transducer}"
+                 f"{f' with a {freq_khz} kHz frequency' if freq_khz is not None else ''}")
+    assert transducer in P.TRANSDUCERS_BY_NAME, \
+        f"{where} names transducer {transducer}, which is not in SelFiles/transducer_list.yaml"
+    if freq_khz is not None:
+        available = [int(f / 1000) for f in P.TRANSDUCERS_BY_NAME[transducer]['freqs']]
+        assert freq_khz in available, \
+            f"{where} uses {transducer} at {freq_khz} kHz, available frequencies are {available}"
+
+
+def test_every_transducer_type_has_full_pipeline_regression():
+    if not P.TRANSDUCER_TYPES:
+        pytest.skip(f"BabelBrain {P.BABELBRAIN_VERSION} doesn't define transducer geometry types")
+    transducers = P.BASIC_PARAMS['transducers']
+    logging.info(f"Checking the {len(transducers)} BASIC_PARAMS transducer(s) cover every type in {sorted(P.TRANSDUCER_TYPES)}")
+    covered = {P.TRANSDUCERS_BY_NAME[tx]['transducer_type'] for tx, _ in transducers if tx in P.TRANSDUCERS_BY_NAME}
+    missing = sorted(set(P.TRANSDUCER_TYPES) - covered)
+    assert not missing, f"Transducer type(s) {missing} have no transducer in BASIC_PARAMS (regression_test_full_pipeline)"
+
+
+@pytest.mark.parametrize('name', sorted(P.PIPELINE_CASE_SPECS))
+def test_regression_case_options_exist(name):
+    """Every dataset, trajectory type, target and scan type a regression or E2E case names is one
+    the tests and the BabelBrain version under test know."""
+    spec = P.PIPELINE_CASE_SPECS[name]
+    logging.info(f"Checking {name}: dataset {spec['dataset']}, target {spec['target']}, "
+                 f"trajectory {spec['trajectory_type']}, scans {spec['ct_types']}")
+    targets = {**P.VALID_INDIVIDUAL_TARGETS, **P.VALID_COMBINED_TARGETS}
+    assert spec['dataset'] in P.DATASETS, f"{name}: unknown dataset {spec['dataset']}"
+    assert spec['target'] in targets, f"{name}: unknown target {spec['target']}"
+    assert spec['trajectory_type'] in P.TRAJECTORY_TYPES, \
+        f"{name}: trajectory type {spec['trajectory_type']} isn't offered by BabelBrain {P.BABELBRAIN_VERSION}"
+    unknown = [ct for ct in spec['ct_types'] if ct not in P.CT_TYPES]
+    assert not unknown, f"{name}: scan type(s) {unknown} aren't offered by BabelBrain {P.BABELBRAIN_VERSION}"
+
+
+@P.requires_feature('custom_transducers')
+def test_every_custom_template_has_builtin_equivalent():
+    templates, equivalents = set(P.CUSTOM_TX_TEMPLATES), set(P.CUSTOM_TX_EQUIVALENTS)
+    logging.info(f"Checking the {len(templates)} custom template(s) and the {len(equivalents)} "
+                 "CUSTOM_TX_EQUIVALENTS entries name the same templates")
+    assert not templates - equivalents, \
+        f"Custom transducer template(s) {sorted(templates - equivalents)} have no entry in CUSTOM_TX_EQUIVALENTS"
+    assert not equivalents - templates, \
+        f"CUSTOM_TX_EQUIVALENTS lists template(s) {sorted(equivalents - templates)} that no longer exist"
+
+
+@P.requires_feature('custom_transducers')
+@pytest.mark.parametrize('template', sorted(P.CUSTOM_TX_EQUIVALENTS))
+def test_custom_template_matches_its_equivalent(template):
+    path = P.CUSTOM_TX_TEMPLATES_DIR / f"{template}.yaml"
+    if not path.exists():
+        pytest.skip(f"{path} does not exist (reported by test_every_custom_template_has_builtin_equivalent)")
+    with open(path) as f:
+        config = yaml.safe_load(f)
+    equivalent = P.CUSTOM_TX_EQUIVALENTS[template]
+    logging.info(f"Checking template {template} matches built-in {equivalent['transducer']}: "
+                 f"same geometry type ({config.get('geometry_type')}) and includes {equivalent['freq_khz']} kHz")
+
+    tx = P.TRANSDUCERS_BY_NAME.get(equivalent['transducer'])
+    assert tx is not None, f"{equivalent['transducer']} is not a built-in transducer"
+    assert tx['transducer_type'] == config['geometry_type'], \
+        f"{template} is a {config['geometry_type']} template but {tx['name']} is a {tx['transducer_type']}"
+    assert equivalent['freq_khz'] * 1000 in config['frequencies'], \
+        f"{template} template doesn't include {equivalent['freq_khz']} kHz ({config['frequencies']})"
+
+
+# ================================================================================================================================
+# TEST DATA
+# ================================================================================================================================
+def _required_inputs():
+    """Inputs the release test matrix needs."""
+    files = []
+    for ds in P.DATASETS.values():
+        files += [ds['m2m_folder_path'], ds['T1_path']]
+        for trajectory_type in ('brainsight', 'slicer'):
+            for target in P.TESTED_INDIVIDUAL_TARGETS:
+                files.append(str(P.trajectory_file(trajectory_type, ds['id'], target)))
+    files.append(str(P.THERMAL_PROFILES_DIR / P.DEFAULT_THERMAL_PROFILE))
+    # Everything each regression and E2E case reads
+    for spec in P.PIPELINE_CASE_SPECS.values():
+        ds = P.DATASETS[spec['dataset']]
+        files.append(str(P.trajectory_file(spec['trajectory_type'], ds['id'], spec['target'])))
+        files.append(str(P.THERMAL_PROFILES_DIR / spec['thermal_profile']))
+        if spec['multipoint_profile']:
+            files.append(str(P.MULTIPOINT_PROFILES_DIR / spec['multipoint_profile']))
+        if spec['require_ct_files']:
+            files += [os.path.join(ds['folder_path'], P.CT_TYPE_FILES[ct]) for ct in spec['ct_types'] if ct != 'NONE']
+    return sorted(set(files))
+
+
+def _optional_inputs():
+    """Inputs for parameter values that are skipped when their file is missing."""
+    files = []
+    for ds in P.DATASETS.values():
+        for trajectory_type in P.TRAJECTORY_TYPES:
+            for target in list(P.VALID_INDIVIDUAL_TARGETS) + list(P.VALID_COMBINED_TARGETS) + list(P.INVALID_TARGETS):
+                files.append(str(P.trajectory_file(trajectory_type, ds['id'], target)))
+        files += [os.path.join(ds['folder_path'], f) for f in P.CT_TYPE_FILES.values()]
+    return sorted(set(files) - set(_required_inputs()))
+
+
+def test_required_test_inputs_exist():
+    required = _required_inputs()
+    logging.info(f"Checking the {len(required)} input file(s) the release test matrix needs exist")
+    missing = [f for f in required if not os.path.exists(f)]
+    assert not missing, "Missing test inputs:\n" + "\n".join(missing)
+
+
+def test_optional_test_inputs_exist():
+    optional = _optional_inputs()
+    logging.info(f"Checking the {len(optional)} optional input file(s) exist (missing ones skip their tests)")
+    missing = [f for f in optional if not os.path.exists(f)]
+    if missing:
+        # One file per log line: a skip reason is shown on a single line, with any \n escaped
+        logging.warning(f"{len(missing)} optional input(s) missing, the tests using them are skipped:")
+        for f in missing:
+            logging.warning(f"  {f}")
+        pytest.skip(f"{len(missing)} optional inputs are missing (listed in the log), the tests using them are skipped")

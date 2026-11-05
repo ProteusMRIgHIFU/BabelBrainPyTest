@@ -1,0 +1,390 @@
+"""
+Major release end-to-end tests (BabelBrain_Pytest_Usage.md, Table 9).
+
+e2e_test_remote_full_pipeline
+    Full pipeline on the quick configuration (parameters.REMOTE_SIM_PARAMS) offloaded to a BabelBrain job server. Uses the server in the optional
+    [Remote] section of Tests/config.ini (name, host, port, token, https), otherwise starts
+    a local headless server (BabelBrain.py --serve). Only checks that the run completes.
+
+e2e_test_custom_tx_full_pipeline
+    Creates a custom transducer from each template in custom_tx_templates/ and compares
+    its full pipeline outputs against the built-in transducer the template replicates.
+    Both runs are saved in <gen_output_folder>/e2e_custom_tx_full_pipeline/ before being
+    compared (see pipeline_helpers.ensure_case_outputs).
+
+e2e_test_multipoint_full_pipeline
+    Full pipeline with a multipoint profile on the quick configuration (parameters.MULTIPOINT_SIM_PARAMS).
+    Checks that every step completes and the thermal outputs are written.
+
+e2e_test_combined_trajectories_full_pipeline
+    Full pipeline on a trajectory file with a left and a right target on the quick configuration
+    (parameters.COMBINED_TRAJECTORIES_SIM_PARAMS). Each trajectory is simulated on its own tab and
+    merged with Combine Trajectories in steps 2 and 3. Checks that both trajectories and the merged
+    result have their outputs.
+
+e2e_test_vtk_visualization_full_pipeline
+    Full pipeline on the quick configuration (parameters.VTK_VISUALIZATION_SIM_PARAMS) with the VTK
+    viewer opened after step 1, so steps 2 and 3 push their results into it as in the GUI. After each
+    step the viewer must show that step's results (the data BabelBrain keeps for its plots) with
+    BabelBrain's display settings, and closing and reopening it must rebuild every layer. Screenshots
+    of the viewer and the GUI after each step go to the report. Runs every time (it needs the live
+    BabelBrain window), its outputs aren't saved.
+
+The multipoint and combined trajectories runs are saved in <gen_output_folder>/<suite>/<case_id>
+and reused by later sessions on the same BabelBrain commit (see pipeline_helpers.ensure_case_outputs).
+"""
+import glob
+import logging
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import pytest
+import yaml
+
+import Tests.helpers.pipeline_helpers as rh
+from Tests.helpers import vtk_viewer_helpers as vh
+
+from Tests.helpers.parameters import (BABELBRAIN_ROOT, CUSTOM_TX_EQUIVALENTS,
+                              CUSTOM_TX_TEMPLATES_DIR, E2E_CASES, RELEASE_BACKENDS,
+                              config, requires_feature)
+from Tests.helpers.pipeline_helpers import (PipelineCase, case_param, cases_from_spec,
+                                    saved_outputs_reusable, thermal_outputs)
+
+pytestmark = pytest.mark.major_release
+
+CUSTOM_TX_SUITE = 'e2e_custom_tx_full_pipeline'
+MULTIPOINT_SUITE = 'e2e_multipoint_full_pipeline'
+COMBINED_TRAJECTORIES_SUITE = 'e2e_combined_trajectories_full_pipeline'
+REMOTE_SERVER_NAME = 'pytest-server'
+SERVER_START_TIMEOUT_S = 180
+
+# ================================================================================================================================
+# CASES
+# ================================================================================================================================
+
+# Slicer targets for every pair so TheraPhas isn't flipped and compares 1 to 1 with its custom version
+CUSTOM_TX_CASES = [
+    case_param(PipelineCase(dataset='ernie', trajectory_type='slicer', backend=backend,
+                            custom_tx_template=template, **equivalent),
+               marks=[pytest.mark.slow])
+    for backend in RELEASE_BACKENDS
+    for template, equivalent in CUSTOM_TX_EQUIVALENTS.items()
+]
+
+# Parameter sets in parameters.E2E_CASES
+REMOTE_CASES = cases_from_spec(E2E_CASES['e2e_test_remote_full_pipeline'], [pytest.mark.slow])
+MULTIPOINT_CASES = cases_from_spec(E2E_CASES['e2e_test_multipoint_full_pipeline'], [pytest.mark.slow])
+COMBINED_TRAJECTORIES_CASES = cases_from_spec(E2E_CASES['e2e_test_combined_trajectories_full_pipeline'],
+                                              [pytest.mark.slow])
+VTK_VISUALIZATION_CASES = cases_from_spec(E2E_CASES['e2e_test_vtk_visualization_full_pipeline'],
+                                          [pytest.mark.slow])
+
+
+# ================================================================================================================================
+# FIXTURES
+# ================================================================================================================================
+def _free_port():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture(scope='module')
+def remote_server(tmp_path_factory):
+    """Remote server registered in an isolated servers.json (the user's list is left alone)."""
+    import RemoteServers
+
+    servers_dir = tmp_path_factory.mktemp('remote_servers')
+    process = None
+    log_file = None
+
+    if config.has_section('Remote') and config['Remote'].get('host'):
+        remote = config['Remote']
+        server = {'name': remote.get('name', REMOTE_SERVER_NAME), 'host': remote['host'],
+                  'port': remote.getint('port', 8760), 'token': remote.get('token') or None,
+                  'https': remote.getboolean('https', False)}
+        logging.info(f"Using remote server '{server['name']}' at {server['host']}:{server['port']} from config.ini")
+    else:
+        server = {'name': REMOTE_SERVER_NAME, 'host': '127.0.0.1', 'port': _free_port(), 'token': None}
+        log_path = servers_dir / 'server.log'
+        log_file = open(log_path, 'w')
+        process = subprocess.Popen([sys.executable, os.path.join('BabelBrain', 'BabelBrain.py'), '--serve', '--headless',
+                                    '--serve-host', server['host'], '--serve-port', str(server['port'])],
+                                   cwd=BABELBRAIN_ROOT, stdout=log_file, stderr=subprocess.STDOUT,
+                                   # Windows: own process group so _stop_server can send it CTRL_BREAK
+                                   creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+        logging.info(f"Started a local headless BabelBrain server on {server['host']}:{server['port']} "
+                     f"(log: {log_path})")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(RemoteServers, 'CONFIG_DIR', str(servers_dir))
+        mp.setattr(RemoteServers, 'SERVERS_FILE', str(servers_dir / 'servers.json'))
+        RemoteServers.save_servers([server])
+        logging.info(f"Registered '{server['name']}' in {servers_dir / 'servers.json'}, waiting up to "
+                     f"{SERVER_START_TIMEOUT_S} s for it to answer")
+
+        deadline = time.time() + SERVER_START_TIMEOUT_S
+        ok, info = RemoteServers.test_connection(server)
+        while not ok and time.time() < deadline:
+            if process is not None and process.poll() is not None:
+                break
+            time.sleep(2)
+            ok, info = RemoteServers.test_connection(server)
+
+        if not ok:
+            _stop_server(process, log_file)
+            details = f" Server log: {servers_dir / 'server.log'}" if process is not None else ""
+            pytest.fail(f"Remote server {server['host']}:{server['port']} not reachable: {info}.{details}")
+
+        logging.info(f"Remote server {server['host']}:{server['port']} is reachable: {info}")
+        yield server
+
+    _stop_server(process, log_file)
+
+
+def _stop_server(process, log_file):
+    if process is not None and process.poll() is None:
+        logging.info("Stopping the local BabelBrain server")
+        # Popen.send_signal only accepts SIGTERM/CTRL_C_EVENT/CTRL_BREAK_EVENT on Windows, and
+        # SIGTERM there is TerminateProcess (no cleanup). CTRL_BREAK lets the server shut down.
+        process.send_signal(signal.CTRL_BREAK_EVENT if sys.platform == 'win32' else signal.SIGINT)
+        try:
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    if log_file is not None:
+        log_file.close()
+
+
+@pytest.fixture(scope='module')
+def custom_tx_root(tmp_path_factory):
+    """Isolated folder for custom transducers so the user's saved ones are never touched."""
+    from CreateTransducers import transducer_creator
+
+    root = tmp_path_factory.mktemp('custom_transducers')
+    logging.info(f"Custom transducers for this module are written to {root}")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv('BABEL_CUSTOM_TX_ROOT', str(root))
+        # CustomTransducer writes to its own module constant rather than custom_transducers_root()
+        mp.setattr(transducer_creator, 'CUSTOM_TRANSDUCERS_FOLDER', root)
+        yield {'root': root, 'created': {}}
+    sys.path[:] = [p for p in sys.path if p != str(root)]
+
+
+def _create_custom_tx(pipeline, custom_tx_root, case):
+    """Create (once per module) the custom transducer for case.custom_tx_template on case.backend."""
+    from CreateTransducers.transducer_creator import CustomTransducer, get_class_name
+    from BabelBrain.SelFiles.SelFiles import SelFiles
+
+    key = (case.custom_tx_template, case.backend)
+    if key in custom_tx_root['created']:
+        return custom_tx_root['created'][key]
+
+    devices = [dev for dev, backend in SelFiles.GetAvailableGPUs(None) if backend == case.backend]
+    if not devices:
+        pytest.skip(f"{case.backend} backend is not available on this machine")
+
+    # Unique name per template/backend so each one gets its own package
+    with open(CUSTOM_TX_TEMPLATES_DIR / f"{case.custom_tx_template}.yaml") as f:
+        template = f.read()
+    tx_name = f"Pytest_{case.custom_tx_template}_{case.backend}"
+    config_file = Path(pipeline.work_dir) / f"{tx_name}.yaml"
+    with open(config_file, 'w') as f:
+        f.write(_replace_yaml_name(template, tx_name))
+
+    pipeline.auto_answer_dialogs()
+    with open(BABELBRAIN_ROOT / 'BabelBrain' / 'version-gui.txt') as f:
+        bb_version = f.readline().strip()
+    logging.info(f"Creating custom transducer {tx_name} from template {case.custom_tx_template} "
+                 f"on {case.backend} ({devices[0]})")
+    tx = CustomTransducer(bb_version=bb_version, transducer_yaml=str(config_file),
+                          gpu=devices[0], computing_backend=case.backend)
+    custom_tx_root['created'][key] = get_class_name(tx.name)
+    return custom_tx_root['created'][key]
+
+
+def _replace_yaml_name(template_text, new_name):
+    lines = template_text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.startswith('name:'):
+            lines[i] = f"name: {new_name}\n"
+            break
+    else:
+        raise ValueError("Template has no 'name:' entry")
+    assert yaml.safe_load(''.join(lines))['name'] == new_name
+    return ''.join(lines)
+
+
+# ================================================================================================================================
+# TESTS
+# ================================================================================================================================
+@requires_feature('remote_servers')
+@pytest.mark.parametrize('case', REMOTE_CASES)
+def test_e2e_remote_full_pipeline(pipeline, remote_server, case):
+    output_dir = pipeline.work_dir / case.case_id
+    logging.info(f"Running {case.case_id} (steps 1 to {case.last_step}) on remote server "
+                 f"'{remote_server['name']}' at {remote_server['host']}:{remote_server['port']}")
+    bb = pipeline.run(case, output_dir, remote_server_name=remote_server['name'])
+
+    # ComputingBackend 5 is the remote server entry of the computing engine list
+    logging.info("Checking the remote server was the computing engine and thermal outputs came back")
+    assert bb.Config['ComputingBackend'] == 5, "Remote server was not selected as the computing engine"
+    outputs = thermal_outputs(output_dir)
+    logging.info(f"Remote run returned {len(outputs)} thermal output(s) to {output_dir}")
+    assert outputs, "Remote run finished but no thermal outputs were returned"
+
+
+def _custom_tx_case_outputs(pipeline, custom_tx_root, case):
+    """Saved outputs of the built-in transducer and of its custom replica (the custom transducer
+    is only created when its outputs have to be generated)."""
+    logging.info(f"Outputs of built-in transducer {case.transducer} at {case.freq_khz} kHz")
+    builtin_dir = pipeline.ensure_outputs(CUSTOM_TX_SUITE, replace(case, custom_tx_template=None))
+    logging.info(f"Outputs of its custom replica (template {case.custom_tx_template})")
+    custom_name = None
+    if not saved_outputs_reusable(CUSTOM_TX_SUITE, case):
+        custom_name = _create_custom_tx(pipeline, custom_tx_root, case)
+    custom_dir = pipeline.ensure_outputs(CUSTOM_TX_SUITE, case, custom_tx_name=custom_name)
+    return builtin_dir, custom_dir
+
+
+@requires_feature('custom_transducers')
+@pytest.mark.generate_outputs
+@pytest.mark.parametrize('case', CUSTOM_TX_CASES)
+def test_generate_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
+    logging.info(f"Generating outputs for {case.case_id}: custom {case.custom_tx_template} template vs "
+                 f"built-in {case.transducer} on {case.backend}")
+    _custom_tx_case_outputs(pipeline, custom_tx_root, case)
+
+
+@requires_feature('custom_transducers')
+@pytest.mark.parametrize('case', CUSTOM_TX_CASES)
+def test_e2e_custom_tx_full_pipeline(pipeline, custom_tx_root, case):
+    logging.info(f"Case {case.case_id}: custom {case.custom_tx_template} template vs built-in "
+                 f"{case.transducer} at {case.freq_khz} kHz on {case.backend}")
+    builtin_dir, custom_dir = _custom_tx_case_outputs(pipeline, custom_tx_root, case)
+    logging.info("Checking the custom transducer's thermal outputs match the built-in ones exactly")
+    # TxSystem holds the transducer's name, which differs between the custom and built-in transducer
+    pipeline.assert_thermal_outputs_match(
+        builtin_dir, custom_dir,
+        message=f"Custom {case.custom_tx_template} transducer differs from built-in {case.transducer}",
+        ignore=('TxSystem',))
+
+
+@pytest.mark.parametrize('case', MULTIPOINT_CASES)
+def test_e2e_multipoint_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: full pipeline with multipoint profile {case.multipoint_profile}")
+    output_dir = pipeline.ensure_outputs(MULTIPOINT_SUITE, case)
+    outputs = thermal_outputs(output_dir)
+    logging.info(f"Multipoint run ({case.multipoint_profile}) has {len(outputs)} thermal output(s) in {output_dir}")
+    assert outputs, f"Multipoint run finished but no thermal outputs were saved in {output_dir}"
+
+
+@pytest.mark.parametrize('case', COMBINED_TRAJECTORIES_CASES)
+def test_e2e_combined_trajectories_full_pipeline(pipeline, case):
+    logging.info(f"Case {case.case_id}: two targets in one trajectory file, merged with Combine Trajectories")
+    output_dir = pipeline.ensure_outputs(COMBINED_TRAJECTORIES_SUITE, case)
+    logging.info("Checking the merged acoustic field, merged thermal output and per trajectory thermal outputs")
+
+    # Combined outputs are named <ID 1>+<ID 2>_<transducer>_..._Merged_*
+    merged_acoustic = glob.glob(os.path.join(str(output_dir), '**', '*+*Merged_NORM.nii.gz'), recursive=True)
+    assert merged_acoustic, f"No combined acoustic field (Merged_NORM.nii.gz) in {output_dir}"
+
+    outputs = thermal_outputs(output_dir)
+    merged_thermal = [f for f in outputs if 'Merged_DataForSim-ThermalField' in os.path.basename(f)]
+    trajectory_thermal = [f for f in outputs if f not in merged_thermal]
+    logging.info(f"Combined trajectory outputs in {output_dir}: {len(merged_acoustic)} merged acoustic field(s), "
+                 f"{len(merged_thermal)} merged thermal output(s), {len(trajectory_thermal)} per trajectory thermal output(s)")
+    assert merged_thermal, f"No combined thermal output (Merged_DataForSim-ThermalField*.h5) in {output_dir}"
+    assert len(trajectory_thermal) >= 2, \
+        f"Expected a thermal output for each of the two trajectories in {output_dir}, found {trajectory_thermal}"
+
+
+def _run_step(step, qtbot, bb, screenshots):
+    try:
+        if step == 1:
+            rh.run_pipeline(qtbot, bb, last_step=1, screenshots=screenshots, image_to_base64=vh.image_to_base64)
+        else:
+            rh.run_step(qtbot, bb, step, screenshots=screenshots, image_to_base64=vh.image_to_base64)
+    except rh.PipelineError as error:
+        pytest.fail(str(error))
+
+
+def _assert_layer_matches(viewer, layer_id, nifti):
+    np.testing.assert_allclose(vh.layer_data(viewer, layer_id), np.asarray(nifti.dataobj, dtype=np.float32),
+                               rtol=1e-6, atol=1e-6, err_msg=f"{layer_id} layer differs from BabelBrain's result")
+
+
+@requires_feature('vtk_viewer')
+@pytest.mark.parametrize('case', VTK_VISUALIZATION_CASES)
+def test_e2e_vtk_visualization_full_pipeline(qtbot, monkeypatch, tmp_path, case, viewer_screenshots):
+    logging.info(f"Case {case.case_id}: VTK viewer opened after step 1 and kept open through step 3")
+    rh.auto_answer_dialogs(monkeypatch)
+    bb = rh.build_babelbrain(qtbot, case, tmp_path / case.case_id)
+    gui = viewer_screenshots.entries  # GUI screenshots after each step go next to the viewer's
+
+    # Step 1, then open the viewer
+    logging.info("Checking the VTK viewer button is disabled before step 1")
+    assert not bb.Widget.vtkVisualizationqPushButton.isEnabled()
+    _run_step(1, qtbot, bb, gui)
+    assert bb.Widget.vtkVisualizationqPushButton.isEnabled()
+    logging.info("Opening the VTK viewer")
+    bb.Widget.vtkVisualizationqPushButton.click()
+    window = bb._vtk_visualization
+    qtbot.addWidget(window)
+    viewer = window.viewer[0]
+    viewer_screenshots.add(viewer, f"Step 1: {case.case_id}")
+
+    logging.info("Checking the viewer shows the step 1 mask and T1W, with the sliders on the focal point")
+    assert window.tabs.tabText(0) == bb.Config['ID'][0]
+    assert vh.layer_ids(viewer) == ['', 'T1W']
+    _assert_layer_matches(viewer, '', bb._MaskNib[0])
+    _assert_layer_matches(viewer, 'T1W', bb._T1WNib[0])
+    focal = np.argwhere(np.asarray(bb._MaskNib[0].dataobj) == vh.FOCAL_LABEL)[0]
+    assert vh.slider_values(viewer) == [focal[1], focal[0], focal[2]]
+
+    # Step 2 with the viewer open
+    _run_step(2, qtbot, bb, gui)
+    viewer_screenshots.add(viewer, "Step 2: skull pressure (Jet, cutoff 0.25), water field hidden")
+    logging.info("Checking the Skull and Water layers match step 2's fields, only Skull shown (cutoff 0.25)")
+    assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water']
+    _assert_layer_matches(viewer, 'Skull', bb._NiftiSkull[0])
+    _assert_layer_matches(viewer, 'Water', bb._NiftiWater[0])
+    skull = vh.layer_data(viewer, 'Skull')
+    assert skull.max() > 0, "empty skull pressure field"
+    assert vh.layer(viewer, 'Skull').visible and not vh.layer(viewer, 'Water').visible
+    assert vh.layer(viewer, 'Skull').cutoff == 0.25
+    peak = np.unravel_index(np.argmax(skull), skull.shape)
+    logging.info(f"Skull pressure peak at voxel {peak}, focal point voxel {tuple(focal)}")
+
+    # Step 3 with the viewer open
+    _run_step(3, qtbot, bb, gui)
+    viewer_screenshots.add(viewer, "Step 3: intensity (cutoff 0.1), temperature and Step 2 fields hidden")
+    logging.info("Checking the Intensity and Temperature layers match step 3's maps, only Intensity shown")
+    assert vh.layer_ids(viewer) == ['', 'T1W', 'Skull', 'Water', 'Intensity', 'Temperature']
+    _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
+    _assert_layer_matches(viewer, 'Temperature', bb._NiftiTemperature[0])
+    assert [vh.layer(viewer, i).visible for i in ('Skull', 'Water', 'Intensity', 'Temperature')] == \
+        [False, False, True, False]
+    assert vh.layer_data(viewer, 'Temperature').max() > 37.0, "no heating in the temperature map"
+
+    # Closing and reopening rebuilds the viewer with every result
+    shown = {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)}
+    logging.info(f"Closing and reopening the viewer (layers shown: {[i for i, v in shown.items() if v]})")
+    window.close()
+    assert not hasattr(bb, '_vtk_visualization')
+    bb.Widget.vtkVisualizationqPushButton.click()
+    window = bb._vtk_visualization
+    qtbot.addWidget(window)
+    viewer = window.viewer[0]
+    viewer_screenshots.add(viewer, "Reopened after Step 3")
+    logging.info("Checking the reopened viewer has every layer with the same visibility and data")
+    assert {i: vh.layer(viewer, i).visible for i in vh.layer_ids(viewer)} == shown
+    _assert_layer_matches(viewer, 'Intensity', bb._NiftiIntensity[0])
+    window.close()
