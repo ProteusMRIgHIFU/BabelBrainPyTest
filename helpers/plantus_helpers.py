@@ -271,10 +271,16 @@ def run_plantus_headless(monkeypatch, plantus_args, runOnlyTrajectory=-1):
             i = args.index('--placement_only')
             args[i:i + 2] = [f'--placement_only={args[i + 1]}']
         args.append('--skip_viewer')
+        if sys.platform == 'win32':
+            # cmd.exe splits unquoted batch arguments at '=', so run_win.bat would see
+            # --placement_only and N as %8 and %9 and drop --skip_viewer. Quote that argument
+            # (subprocess only quotes arguments with spaces), passing a command string instead.
+            args = ' '.join(f'"{a}"' if a.startswith('--placement_only=') else subprocess.list2cmdline([str(a)])
+                            for a in args)
         # Live logging (log_cli in pytest.ini) suspends and resumes pytest's output capture, which
         # puts pytest's own sys.stdout back over BabelBrain's redirect to the queue
         redirect = sys.stdout
-        logging.info(f"Running {' '.join(map(str, args))}")
+        logging.info(f"Running {args if isinstance(args, str) else ' '.join(map(str, args))}")
         sys.stdout = redirect
         return real_run(args, **kwargs)
 
