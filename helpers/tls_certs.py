@@ -29,8 +29,19 @@ def openssl():
     return path
 
 
+# Everything the certificates need is given on the command line, so openssl runs with this minimal
+# config instead of its default one. conda-forge's openssl on Windows has no openssl.cnf and looks for
+# it under C:\Program Files\Common Files\ssl, so `openssl req` fails without OPENSSL_CONF set.
+MINIMAL_CONFIG = "[req]\ndistinguished_name = req_distinguished_name\n[req_distinguished_name]\n"
+
+
 def _run(*args, cwd):
-    result = subprocess.run([openssl(), *args], cwd=cwd, capture_output=True, text=True)
+    config = os.path.join(cwd, 'openssl.cnf')
+    if not os.path.isfile(config):
+        with open(config, 'w') as f:
+            f.write(MINIMAL_CONFIG)
+    env = {**os.environ, 'OPENSSL_CONF': config}
+    result = subprocess.run([openssl(), *args], cwd=cwd, capture_output=True, text=True, env=env)
     if result.returncode != 0:
         raise RuntimeError(f"openssl {' '.join(args)} failed: {result.stderr}")
 
