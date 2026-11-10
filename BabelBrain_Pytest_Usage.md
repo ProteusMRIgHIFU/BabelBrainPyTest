@@ -432,6 +432,7 @@ Unit tests should focus primarily on code affected by the release. Minor release
           <li>Catches GPU kernel regressions against CPU (scipy/scikit-image/trimesh) reference outputs</li>
           <li>The small synthetic head covers every resolution quickly and needs no test data; the full head datasets are only run for major releases (RELEASE_SPATIAL_STEPS in parameters.py)</li>
           <li>CPU references are cached after the first run</li>
+          <li>test_LabelImage_vs_CPU is skipped on Metal (BabelBrain has no Metal LabelImage kernel and uses the CPU label instead)</li>
         </ul>
       </td>
     </tr>
@@ -787,6 +788,7 @@ Major releases run every minor release unit test (Table 3), on every GPU backend
         <ul>
           <li>Covers every GPU backend and resolution, higher resolutions exercise large arrays and memory limits</li>
           <li>All resolutions run on the small synthetic head, the full head datasets only at Med_Res as their high resolutions take very long (RELEASE_SPATIAL_STEPS in parameters.py; the other real dataset resolutions are still available as unit tests)</li>
+          <li>test_LabelImage_vs_CPU is skipped on Metal (no Metal LabelImage kernel in BabelBrain)</li>
         </ul>
       </td>
     </tr>
@@ -864,6 +866,7 @@ Integration testing should cover the major supported component interactions.
           <li>The real PlanTUS run from BabelBrain (RUN_PLAN_TUS.Execute, RunPlanTUSBackground, the bundled run script and SimNIBS): skin maps for the target, reloading existing results, the placement for the best scoring vertex, the _PlanTUS trajectory BabelBrain continues with, and BabelBrain's PlanTUS viewers on the outputs</li>
           <li>PlanTUS' own viewer is skipped (--skip_viewer) and the placement it would hand to BabelBrain is taken directly</li>
           <li>PlanTUS runs on the CPU, so it doesn't depend on a GPU or computing backend. Slow (~2 min); requires simnibs_root_path in config.ini, skipped on BabelBrain versions without PlanTUS</li>
+          <li>PlanTUS' Python dependencies (nibabel, nilearn, pyyaml, h5py, trimesh, vtk) must be installed in SimNIBS' simnibs_env; when one is missing the tests error (in their shared PlanTUS run fixture) with the pip install command to run</li>
         </ul>
       </td>
     </tr>

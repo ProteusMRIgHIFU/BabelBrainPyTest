@@ -3,7 +3,7 @@
 How to set up, run and extend the BabelBrain tests. There are two documents:
 
 - **README.md** (this file): setup, layout, and how to run each kind of test.
-- **[BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)**: the release test plan, i.e. which tests and parameter combinations minor and major releases require (Tables 1 to 10).
+- **[BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)**: the release test plan, i.e. which tests and parameter combinations minor and major releases require (Tables 1 to 11).
 
 Run every command below from the top level BabelBrain folder, and pass `Tests` (or a path under it) to pytest, e.g. `pytest Tests -m "gpu"`. Pytest then uses [Tests/pytest.ini](pytest.ini) (command line options, live logging, the html report, the required plugins and the markers). A bare `pytest` with no path only finds a `pytest.ini` in the top level folder, which isn't the test suite's.
 
@@ -74,8 +74,9 @@ pip install pytest-xdist pytest-benchmark pytest-profiling pytest-sugar
 Tests needing these are skipped, not failed, when they're missing:
 
 - **SimNIBS** (set `simnibs_root_path`, below): soft tissue segmentation regression cases and the PlanTUS integration test.
-- **Blender**: the `blender` variants of the DoIntersect unit tests (trimesh must find the Blender executable). The `manifold` variants need nothing extra.
-- **openssl** on the `PATH`: the TLS cases of the remote server tests.
+- **PlanTUS dependencies in `simnibs_env`**: the PlanTUS integration test also needs the packages PlanTUS imports (nibabel, nilearn, pyyaml, h5py, trimesh, vtk) installed in SimNIBS' own Python. SimNIBS doesn't ship them all, and unlike the programs above a missing package makes the tests **error** instead of skipping, with the `pip install` command to run (`<simnibs_root_path>/simnibs_env/... -m pip install <packages>`).
+- **Blender**: the `blender` variants of the DoIntersect unit tests (trimesh must find the Blender executable; Blender versions before 4.1 work too). The `manifold` variants need nothing extra.
+- **openssl** on the `PATH`: the TLS cases of the remote server tests. The tests give openssl its own minimal config, so an install without an `openssl.cnf` (e.g. conda-forge's on Windows) works.
 
 ## 5. config.ini
 
@@ -154,11 +155,12 @@ pytest Tests/Unit -m "gpu and low_res" -k "synthetic and Metal"
 
 <pre>
 BabelBrain/
-├── pytest.ini
 ├── BabelBrain/
 ├── TranscranialModeling/
 ├── Tests/
+│     ├── pytest.ini                (command line options, logging, html report, required plugins, markers)
 │     ├── config.ini
+│     ├── example_config.ini
 │     ├── conftest.py               (fixtures and hooks, delegating to helpers/)
 │     ├── helpers/                  (code the tests import, never run directly)
 │     │    ├── parameters.py        (datasets, targets, profiles, transducers, release test matrix)
@@ -167,12 +169,16 @@ BabelBrain/
 │     │    ├── comparisons.py       (array, mask, mesh and h5 output comparisons)
 │     │    ├── plots.py             (report plots: volume slices, mesh views)
 │     │    ├── report_viewers.py    (slider viewer and report entry html)
+│     │    ├── logs.py              (log helpers: array summaries, step durations)
 │     │    ├── mesh_checks.py       (point-in-mesh checks for intersections)
 │     │    ├── blender_view.py      (Blender's own boolean result and .blend scenes)
-│     │    └── synthetic_dataset.py (small synthetic head for the GPU unit tests)
+│     │    ├── synthetic_dataset.py (small synthetic head for the GPU unit tests)
+│     │    ├── vtk_viewer_helpers.py (synthetic viewer volumes, viewer layers and screenshots)
+│     │    ├── plantus_helpers.py   (PlanTUS inputs, headless runs and dependency check)
+│     │    └── tls_certs.py         (openssl test certificates for the remote server tests)
 │     ├── scripts/                  (run by hand around pytest, never imported by tests)
 │     │    ├── isolate_pytest.py    (one pytest process per test)
-│     │    ├── combine_html_reports.py
+│     │    ├── combine_html_reports.py (merge several pytest-html reports into one)
 │     │    └── examples/            (example regression shell scripts)
 │     ├── Profiles/                 (pytest thermal profiles)
 │     ├── Consistency/              (checks parameters.py still matches BabelBrain and the test data)
@@ -194,8 +200,8 @@ BabelBrain/
 │     │         └── babel_integration/
 │     │              └── test_babel_integration_helpers.py
 │     ├── Integration/              (components working together, e.g. test_vtk_visualization.py, test_remote_server_connection.py, test_plantus.py)
-│     ├── E2E/
-│     ├── Regression/
+│     ├── E2E/                      (test_full_pipeline.py, test_e2e_release.py)
+│     ├── Regression/               (test_regression_release.py)
 │     └── Generate_Outputs/
 └── ...
 </pre>
@@ -318,6 +324,8 @@ GPU unit tests have the `gpu` marker and are parametrized by computing backend (
 
 Every spatial step runs on the real datasets (ID_0082, ernie) and on a small synthetic head (dataset id `synthetic`, generated automatically by [synthetic_dataset.py](helpers/synthetic_dataset.py) into the gitignored `Tests/.cache` folder), which makes the high resolutions practical.
 
+`test_LabelImage_vs_CPU` is skipped on Metal: BabelBrain has no Metal LabelImage kernel and labels on the CPU instead.
+
 ```bash
 pytest Tests/Unit -m "gpu and not slow" -k "synthetic and Metal"   # quick check on your machine's backend
 pytest Tests/Unit -m "gpu"                                         # all GPU unit tests
@@ -347,6 +355,8 @@ End-to-end tests run the full BabelBrain pipeline. They are parametrized by the 
 - Frequency: depends on the transducer
 - Computing backend: CUDA, OpenCL, Metal (MLX isn't tested until BabelBrain fully supports it)
 
+Every full pipeline test (these and the release, regression and generate_outputs tests) starts BabelBrain's advanced options from their defaults, not from whatever the last GUI session saved (on versions before v0.8.2, which have no `ApplyAdvancedConfig`, they're reset from BabelBrain's own default options), and copies the inputs into its output folder so the test data folder is never modified.
+
 That is over 100,000 versions of one full pipeline test, so narrow the selection down. Either name the parameters:
 
 ```bash
@@ -373,7 +383,7 @@ The `intensive_babelbrain_params` marker selects the intensive configuration: ID
 pytest Tests -k "test_full_pipeline_normal" -m "intensive_babelbrain_params"
 ```
 
-The other `*_babelbrain_params` markers choose their transducers and frequencies with `MARKER_TRANSDUCERS` in the same file. These configurations are for checking a change by hand; releases are tested with the `minor_release` / `major_release` markers (see [Release testing](#release-testing)).
+The other `*_babelbrain_params` markers are added in [collection.py](helpers/collection.py): `all_targets_babelbrain_params`, `ct_targets_babelbrain_params` (same transducers as `all_targets`, NONE and CT scans only) and `bare_min_babelbrain_params` choose their transducers and frequencies with `MARKER_TRANSDUCERS` in parameters.py, and `orig_paper_params` selects the Single transducer on a Slicer superficial target. These configurations are for checking a change by hand; releases are tested with the `minor_release` / `major_release` markers (see [Release testing](#release-testing)).
 
 ## test_full_pipeline_normal
 
@@ -465,7 +475,7 @@ What each set contains:
 - **Integration tests** (marked in each file): [test_vtk_visualization.py](Integration/test_vtk_visualization.py) and [test_remote_server_connection.py](Integration/test_remote_server_connection.py) are in both sets (Tables 4 and 8), [test_plantus.py](Integration/test_plantus.py) only in the major set (it's slow and needs SimNIBS and ernie).
 - **E2E and regression tests**: [E2E/test_e2e_release.py](E2E/test_e2e_release.py) (Table 9) and [Regression/test_regression_release.py](Regression/test_regression_release.py) (Table 10) are marked `major_release`. For a minor release, run only the E2E tests of the features the release affects (Table 5), selected from test_e2e_release.py by name, e.g. `pytest Tests/E2E -k "vtk_visualization and Metal"`. Regression tests aren't run for minor releases (Table 6).
 
-Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report.
+Full pipeline tests take long and use a lot of memory and GPU resources, and running many in one process can crash (especially on Windows). Run them through [isolate_pytest.py](#isolating-a-pytest-run-crash-and-memory-triage), which gives each test its own process, log and report, and merges the reports into one `combined.html` at the end.
 
 The regression tests compare against reference outputs that have to be generated beforehand, see [Regression tests and reference outputs](#regression-tests-and-reference-outputs).
 
@@ -554,8 +564,11 @@ Artifacts are written to `<BabelBrain>/PyTest_Reports/isolated/<timestamp>/`:
 | `summary.csv` | status, exit code, duration, peak RSS and free memory per case |
 | `html/NNNN_<case>.html` | that case's pytest-html report, with the GUI screenshots embedded |
 | `failed_nodeids.txt` | feed straight back in with `--from-file` |
+| `combined.html` | every per-case html report merged into one ([combine_html_reports.py](scripts/combine_html_reports.py)), written when the cases finish, also after a crash or Ctrl-C |
 
-Exit codes are decoded per case: `PASS`, `FAIL`, `CRASH` with the signal name (`SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGKILL`, the last usually meaning the OS ran out of memory), `TIMEOUT`, `MEMLIMIT`, and `NO_TESTS_RUN`. Child processes run with `PYTHONFAULTHANDLER=1`, so a native segfault prints the Python line that caused it instead of dying silently.
+Exit codes are decoded per case: `PASS`, `FAIL`, `CRASH` with the signal name (`SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGKILL`, the last usually meaning the OS ran out of memory), `TIMEOUT`, `MEMLIMIT`, and `NO_TESTS_RUN`. Child processes run with `PYTHONFAULTHANDLER=1`, so a native segfault prints the Python line that caused it instead of dying silently, and with `PYTHONIOENCODING=utf-8`, so non-ASCII output (e.g. Step 1's histogram) can't crash or hang a case on Windows when its output goes to a log file.
+
+The generated `run_isolated.sh` / `.bat` also merges the reports into `combined.html` at the end. With `--run`, if the merge fails, isolate_pytest.py prints the `combine_html_reports.py` command to retry it by hand.
 
 ## Chasing a memory problem
 
@@ -572,7 +585,7 @@ python Tests/scripts/isolate_pytest.py --run --repeat-each 5 --group 5 -- -k "H3
 python Tests/scripts/isolate_pytest.py --run --max-rss-mb 60000 --timeout 3600 -- Tests/Regression -m "major_release"
 ```
 
-Other useful options: `--stop-on-crash`, `--start-at`/`--max-cases` to resume a long run, `--cooldown` to let the GPU driver settle between cases, `--no-html` to skip the per-case html report (keep it on if a test takes screenshots: `conftest.py` attaches them through `pytest_html.extras`, which only exists while the html plugin is loaded), `--quiet-child` to keep the console tidy (the logs are unaffected), and `--dry-run` to see the commands. Long GPU steps produce no output for minutes, so the runner prints a heartbeat with elapsed time and current RSS while a case is silent (`--heartbeat SEC`, `0` disables). Run `--help` for the full list.
+Other useful options: `--stop-on-crash`, `--start-at`/`--max-cases` to resume a long run, `--cooldown` to let the GPU driver settle between cases, `--no-html` to skip the per-case html report (keep it on if a test takes screenshots: `conftest.py` attaches them through `pytest_html.extras`, which only exists while the html plugin is loaded; without per-case reports there is no `combined.html` either), `--no-combine` to keep the per-case reports but skip merging them, `--quiet-child` to keep the console tidy (the logs are unaffected), and `--dry-run` to see the commands. Long GPU steps produce no output for minutes, so the runner prints a heartbeat with elapsed time and current RSS while a case is silent (`--heartbeat SEC`, `0` disables). Run `--help` for the full list.
 
 # Writing tests
 
