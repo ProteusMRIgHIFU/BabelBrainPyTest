@@ -1,5 +1,5 @@
 """
-Unit tests for server.py (BabelBrain_Pytest_Usage.md, Tables 3 and 7), the BabelBrain job server
+Unit tests for server.py (BabelBrain_Test_Plan.md, Tables 3 and 7), the BabelBrain job server
 behind "remote server" computing engines. These cover its connection security settings without
 serving anything: which bind addresses count as local, the HTTPS / mutual TLS context, the refusal
 to start an open server on a network address, upload name sanitising and job spec validation.

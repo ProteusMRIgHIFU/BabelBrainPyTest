@@ -1,5 +1,5 @@
 """
-Unit tests for PlanTUSViewer/RunPlanTUS.py (BabelBrain_Pytest_Usage.md, Table 7), BabelBrain's side
+Unit tests for PlanTUSViewer/RunPlanTUS.py (BabelBrain_Test_Plan.md, Table 7), BabelBrain's side
 of the PlanTUS integration (Options dialog -> "Run PlanTUS"):
 
   * PlanTUSTxConfig                        (transducer config yaml read by PlanTUS_wrapper.py)

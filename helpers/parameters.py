@@ -1,5 +1,5 @@
 """
-Single source of truth for the parameters the test suite runs with (see BabelBrain_Pytest_Usage.md,
+Single source of truth for the parameters the test suite runs with (see BabelBrain_Test_Plan.md,
 Table 2). conftest.py, pipeline_helpers.py and the tests all read from here.
 
 Anything that describes the app (transducers, their frequencies and geometry types, custom
@@ -233,7 +233,7 @@ RELEASE_SPATIAL_STEPS = {
 }
 
 # ================================================================================================================================
-# RELEASE TEST MATRIX (BabelBrain_Pytest_Usage.md, Tables 9 and 10)
+# RELEASE TEST MATRIX (BabelBrain_Test_Plan.md, Tables 9 and 10)
 # ================================================================================================================================
 # Basic configuration: the standard full pipeline set up (dataset, target, one transducer per
 # geometry type, ...). Run as regression_test_full_pipeline, and selected in the older

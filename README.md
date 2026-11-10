@@ -3,7 +3,7 @@
 How to set up, run and extend the BabelBrain tests. There are two documents:
 
 - **README.md** (this file): setup, layout, and how to run each kind of test.
-- **[BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)**: the release test plan, i.e. which tests and parameter combinations minor and major releases require (Tables 1 to 11).
+- **[BabelBrain_Test_Plan.md](BabelBrain_Test_Plan.md)**: the release test plan, i.e. which tests and parameter combinations minor and major releases require (Tables 1 to 11).
 
 Run every command below from the top level BabelBrain folder, and pass `Tests` (or a path under it) to pytest, e.g. `pytest Tests -m "gpu"`. Pytest then uses [Tests/pytest.ini](pytest.ini) (command line options, live logging, the html report, the required plugins and the markers). A bare `pytest` with no path only finds a `pytest.ini` in the top level folder, which isn't the test suite's.
 
@@ -375,7 +375,7 @@ The `basic_babelbrain_params` marker selects the basic configuration, the standa
 - Transducer / frequency: Single 500 kHz, CTX_500 500 kHz, H246 500 kHz, TheraPhas 487 kHz (compared with the 490 kHz REMOPD references), H317 250 kHz, DomeTx 220 kHz (one per transducer geometry type)
 - Computing backend: CUDA, OpenCL, Metal (backends not available on your system are skipped)
 
-It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The major release `regression_test_full_pipeline` (see [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md), Table 10) runs this same configuration: its `REGRESSION_CASES` entry is `BASIC_PARAMS`, so changing the configuration there updates both.
+It's defined by `BASIC_PARAMS` in [parameters.py](helpers/parameters.py). The major release `regression_test_full_pipeline` (see [BabelBrain_Test_Plan.md](BabelBrain_Test_Plan.md), Table 10) runs this same configuration: its `REGRESSION_CASES` entry is `BASIC_PARAMS`, so changing the configuration there updates both.
 
 The `intensive_babelbrain_params` marker selects the intensive configuration: ID_0082 with CT, Deep_Target_Left, H317 at 825 kHz on CUDA, OpenCL and Metal. Tests with this marker also use the configuration's intensive thermal profile, so they run it exactly. It's defined by `INTENSIVE_SIM_PARAMS` in [parameters.py](helpers/parameters.py), and the major release `regression_test_full_pipeline_intensive` runs this same configuration. Multipoint focusing is tested by the E2E test `e2e_test_multipoint_full_pipeline` instead, on the quick configuration (`QUICK_SIM_PARAMS`: ernie, MRI only, superficial target) with H317 at 250 kHz, since multipoint profiles need a phased array.
 
@@ -434,7 +434,7 @@ The html report has one section per compared subfolder (parameter set/device), e
 
 ## Release E2E tests
 
-[E2E/test_e2e_release.py](E2E/test_e2e_release.py) holds the major release E2E tests (remote server, custom transducer, multipoint and combined trajectories full pipelines, Table 9 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)).
+[E2E/test_e2e_release.py](E2E/test_e2e_release.py) holds the major release E2E tests (remote server, custom transducer, multipoint and combined trajectories full pipelines, Table 9 of [BabelBrain_Test_Plan.md](BabelBrain_Test_Plan.md)).
 
 # Generating outputs
 
@@ -456,7 +456,7 @@ Each case is saved in `<gen_output_folder>/<case id>` together with a `pytest_ca
 
 # Release testing
 
-The tests required for minor and major releases are described in [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md). The tests in each release set are marked `minor_release` / `major_release`, and these markers are how releases are tested:
+The tests required for minor and major releases are described in [BabelBrain_Test_Plan.md](BabelBrain_Test_Plan.md). The tests in each release set are marked `minor_release` / `major_release`, and these markers are how releases are tested:
 
 ```bash
 # minor release set on this machine's backend
@@ -485,7 +485,7 @@ Tests for features an older BabelBrain version doesn't have (remote servers, cus
 
 ## Regression tests and reference outputs
 
-A regression test compares outputs of the BabelBrain version being released with **reference outputs** made earlier with the **reference BabelBrain version** (Table 1 of [BabelBrain_Pytest_Usage.md](BabelBrain_Pytest_Usage.md)). The references aren't made during the release run: generate them first, on the release machine.
+A regression test compares outputs of the BabelBrain version being released with **reference outputs** made earlier with the **reference BabelBrain version** (Table 1 of [BabelBrain_Test_Plan.md](BabelBrain_Test_Plan.md)). The references aren't made during the release run: generate them first, on the release machine.
 
 ### 1. Generate the reference outputs (once per reference version and machine)
 

@@ -1,5 +1,5 @@
 """
-Major release regression tests (BabelBrain_Pytest_Usage.md, Table 10).
+Major release regression tests (BabelBrain_Test_Plan.md, Table 10).
 
 Each regression test comes in two parts:
 
@@ -13,7 +13,7 @@ Each regression test comes in two parts:
 
 Saved outputs from the same BabelBrain commit are reused across tests and sessions
 (set BABEL_PYTEST_REGENERATE=1 to force a rerun). To create reference outputs, check
-out the reference BabelBrain version (see Table 1 in BabelBrain_Pytest_Usage.md),
+out the reference BabelBrain version (see Table 1 in BabelBrain_Test_Plan.md),
 point gen_output_folder at the
 reference location and run only the generate tests:
 

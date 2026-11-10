@@ -1,5 +1,5 @@
 """
-Integration tests for PlanTUS (BabelBrain_Pytest_Usage.md, Table 8): BabelBrain's "Run PlanTUS"
+Integration tests for PlanTUS (BabelBrain_Test_Plan.md, Table 8): BabelBrain's "Run PlanTUS"
 (RUN_PLAN_TUS in PlanTUSViewer/RunPlanTUS.py) run with the bundled PlanTUS and SimNIBS on the
 ernie dataset, superficial left target, CTX_500 at 500 kHz.
 

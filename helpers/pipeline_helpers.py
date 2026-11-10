@@ -1,7 +1,7 @@
 """
 Shared helpers to set up, run and compare BabelBrain pipelines in tests (used through the
 `pipeline` fixture in conftest.py, and by the release test matrix described in
-BabelBrain_Pytest_Usage.md).
+BabelBrain_Test_Plan.md).
 
 The pipeline is driven through the SelFiles/BabelBrain widgets (same approach as
 E2E/test_full_pipeline.py) instead of BabelBrain/scripting.py, so the same tests

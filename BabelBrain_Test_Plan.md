@@ -1,4 +1,4 @@
-# BabelBrain Pytest Usage
+# BabelBrain Test Plan
 
 <style>
   /* Table dropdowns: add a subtle note when a table is hidden */
@@ -42,7 +42,7 @@
 
 ## Table of Contents
 
-- [BabelBrain Pytest Usage](#babelbrain-pytest-usage)
+- [BabelBrain Test Plan](#babelbrain-test-plan)
   - [Revision History](#revision-history)
   - [Table of Contents](#table-of-contents)
   - [1. Purpose](#1-purpose)
@@ -650,7 +650,7 @@ Regression tests are not run for minor releases. Outputs are compared against th
     <!-- none -->
     <tr>
       <td>None</td>
-      <td>&ndash;</td>
+      <td>–</td>
       <td>Regression tests are only run for major releases (Table 10)</td>
     </tr>
   </tbody>
@@ -994,7 +994,7 @@ Major releases should exercise the main supported workflows across representativ
         <ul>
           <li>Tests the custom transducer feature: a custom transducer is created from each template in custom_tx_templates/ and its full pipeline outputs are compared with the built-in transducer it replicates (CUSTOM_TX_EQUIVALENTS)</li>
           <li>Slicer trajectories for every pair, so TheraPhas isn't flipped and compares 1 to 1 with its custom version</li>
-          <li>Both runs are saved in &lt;gen_output_folder&gt;/e2e_custom_tx_full_pipeline/ and reused on the same BabelBrain commit</li>
+          <li>Both runs are saved in <gen_output_folder>/e2e_custom_tx_full_pipeline/ and reused on the same BabelBrain commit</li>
           <li>15 total tests (5 templates × 3 backends)</li>
         </ul>
       </td>
@@ -1375,4 +1375,3 @@ A release passes testing when:
 - Numerical or output comparisons remain within defined tolerances.
 - Previously working functionality does not unexpectedly change.
 - Any expected differences from previous results are reviewed and documented.
-
