@@ -1,5 +1,5 @@
 """
-Unit tests for client_functions.py (BabelBrain_Pytest_Usage.md, Tables 3 and 7): the HTTP helpers
+Unit tests for client_functions.py (BabelBrain_Test_Plan.md, Tables 3 and 7): the HTTP helpers
 the remote pipeline (RunServerCalculation) and the example clients use. These check how a server
 record configures them (URL, bearer token, TLS settings) without any network; requests to a real
 server are covered by Integration/test_remote_server_connection.py.

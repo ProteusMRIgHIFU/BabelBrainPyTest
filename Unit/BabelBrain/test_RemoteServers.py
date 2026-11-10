@@ -1,5 +1,5 @@
 """
-Unit tests for RemoteServers.py (BabelBrain_Pytest_Usage.md, Tables 3 and 7): the saved list of
+Unit tests for RemoteServers.py (BabelBrain_Test_Plan.md, Tables 3 and 7): the saved list of
 remote job servers (~/.babelbrain/servers.json) and how a record turns into a URL and TLS settings.
 The servers file is redirected to a temporary folder, so the user's own list is never touched.
 Connecting to a real server is covered by Integration/test_remote_server_connection.py.

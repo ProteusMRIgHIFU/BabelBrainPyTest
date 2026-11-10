@@ -1,5 +1,5 @@
 """
-Integration tests for connecting to a BabelBrain remote job server (BabelBrain_Pytest_Usage.md,
+Integration tests for connecting to a BabelBrain remote job server (BabelBrain_Test_Plan.md,
 Tables 4 and 8): the server's real HTTP front end (server._make_handler, its TLS context, job and
 workspace managers) against the two clients BabelBrain uses,
 

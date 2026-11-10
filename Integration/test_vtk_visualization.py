@@ -1,5 +1,5 @@
 """
-Integration tests for BabelBrain's VTK visualization window (BabelBrain_Pytest_Usage.md, Tables 4
+Integration tests for BabelBrain's VTK visualization window (BabelBrain_Test_Plan.md, Tables 4
 and 8): BabelBrain's own methods that open the viewer and push each step's results into it, run
 against the real viewer (GUIComponents/nifti_viewer.NiftiViewerWindow).
 

@@ -1,6 +1,6 @@
 """
 Unit tests for the VTK NIfTI viewer (GUIComponents/nifti_viewer.py), opened from BabelBrain's
-"VTK visualization" button (BabelBrain_Pytest_Usage.md, Tables 3 and 7).
+"VTK visualization" button (BabelBrain_Test_Plan.md, Tables 3 and 7).
 
 The viewer only needs small synthetic volumes, so these tests use no GPU or test data:
 

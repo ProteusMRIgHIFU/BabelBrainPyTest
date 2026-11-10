@@ -1,5 +1,5 @@
 """
-Major release end-to-end tests (BabelBrain_Pytest_Usage.md, Table 9).
+Major release end-to-end tests (BabelBrain_Test_Plan.md, Table 9).
 
 e2e_test_remote_full_pipeline
     Full pipeline on the quick configuration (parameters.REMOTE_SIM_PARAMS) offloaded to a BabelBrain job server. Uses the server in the optional
